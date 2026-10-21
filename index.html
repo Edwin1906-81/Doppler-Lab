@@ -410,6 +410,6 @@ for(let i=0;i<W-40;i++)drawColumn();
 requestAnimationFrame(frame);
 })();
 </script>
-<script>(function(){function s(){try{parent.postMessage({dopplerLabHeight:document.documentElement.scrollHeight},"*")}catch(e){}}addEventListener("load",s);addEventListener("resize",s);new ResizeObserver(s).observe(document.body)})();</script>
+<script>(function(){function s(){try{parent.postMessage({dopplerLabHeight:Math.ceil(document.querySelector(".wrap").getBoundingClientRect().height)},"*")}catch(e){}}addEventListener("load",s);addEventListener("resize",s);new ResizeObserver(s).observe(document.body)})();</script>
 </body>
 </html>
