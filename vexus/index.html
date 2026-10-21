@@ -1,0 +1,371 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>VExUS Doppler Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: three stacked venous Doppler monitors on the left, settings and VExUS grade rack on the right; stacks on phones. */
+:root{
+  --bg:#EEF2F3; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#14212B; --muted:#5A6B76; --line:#CBD5D9;
+  --accent:#0A7484; --accent-ink:#FFFFFF; --amber:#A65A12; --warn:#B3261E; --ok:#2E7D4F;
+  --g0:#2E7D4F; --g1:#7A7A12; --g2:#B0600F; --g3:#B3261E;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A;
+  --g0:#7CD39A; --g1:#D8D26A; --g2:#F0A24B; --g3:#FF8A80; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A;
+  --g0:#7CD39A; --g1:#D8D26A; --g2:#F0A24B; --g3:#FF8A80; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.92rem;max-width:70ch}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.monitor{background:#05080A;border-radius:10px;padding:10px;border:1px solid var(--line);min-width:0;display:grid;gap:6px}
+.screen{position:relative;width:100%;aspect-ratio:900/200;max-width:100%}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.screen .ov{touch-action:none;cursor:crosshair}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:4px}
+.btn{font-family:var(--font-body);font-size:.88rem;font-weight:500;border:1px solid #33454E;background:#111A1F;color:#D6E2E7;padding:6px 12px;border-radius:6px;cursor:pointer}
+.btn[aria-pressed="true"]{background:#F0A24B;border-color:#F0A24B;color:#2A1600}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.hint{color:#8EA3AD;font-size:.82rem;flex:1 1 220px;min-width:0}
+.rack{display:grid;gap:12px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h2{font-family:var(--font-display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-bottom:10px}
+.ctl label,.ctl .lbl{font-size:.88rem;font-weight:500}
+.ctl output{font-family:var(--font-mono);font-size:.85rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.seg{grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap}
+.seg button{flex:1;font-family:var(--font-mono);font-size:.8rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 6px;border-radius:5px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.presets{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
+.presets button{font-size:.78rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 8px;border-radius:5px;cursor:pointer}
+.presets button:hover{border-color:var(--accent)}
+.grade{display:flex;align-items:baseline;gap:12px;margin-bottom:8px}
+.grade b{font-family:var(--font-display);font-size:2.6rem;line-height:1}
+.grade span{font-size:.9rem;color:var(--muted)}
+.rows{display:grid}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+.row:last-child{border-bottom:0}
+.row b{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .k{color:var(--muted)}
+.pill{font-family:var(--font-mono);font-size:.75rem;padding:1px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.pill.n{color:var(--g0)}.pill.m{color:var(--g2)}.pill.s{color:var(--g3)}
+.flag{font-size:.82rem;margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--sunk);border-left:3px solid var(--amber)}
+.flag:empty{display:none}
+.quiz{display:grid;gap:8px}
+.quiz .seg button{font-size:1rem;padding:8px}
+.result{font-size:.9rem;padding:8px 10px;border-radius:6px;background:var(--sunk)}
+.result.ok{border-left:3px solid var(--ok)}.result.bad{border-left:3px solid var(--warn)}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.lower{grid-template-columns:minmax(0,1fr)}}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem;min-width:520px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--font-display);font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-size:.85rem}
+.note p{margin:0 0 8px;max-width:70ch}
+.note p:last-child{margin:0}
+.note h3{font-family:var(--font-display);font-size:1.05rem;letter-spacing:.03em;margin:10px 0 4px}
+.note h3:first-of-type{margin-top:0}
+.formula{font-family:var(--font-mono);font-size:.85rem;background:var(--sunk);padding:2px 6px;border-radius:4px}
+.meas-empty{color:var(--muted);font-size:.88rem;margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>VExUS Doppler Lab</h1>
+      <p class="sub">Hepatic vein, portal vein and intrarenal venous Doppler side by side, with the IVC, so you can grade venous congestion the way you would at the bedside.</p>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="monitor">
+      <div class="screen"><canvas class="sp" width="900" height="200"></canvas><canvas class="ov" width="900" height="200" aria-label="Hepatic vein Doppler"></canvas></div>
+      <div class="screen"><canvas class="sp" width="900" height="200"></canvas><canvas class="ov" width="900" height="200" aria-label="Portal vein Doppler"></canvas></div>
+      <div class="screen"><canvas class="sp" width="900" height="200"></canvas><canvas class="ov" width="900" height="200" aria-label="Intrarenal Doppler"></canvas></div>
+      <div class="toolbar">
+        <button class="btn" id="freeze" aria-pressed="false">Freeze</button>
+        <button class="btn" id="clear" disabled>Clear calipers</button>
+        <span class="hint">Space bar freezes. On a frozen screen, tap points on any strip to measure. Two points on the portal vein give the pulsatility fraction.</span>
+      </div>
+    </div>
+
+    <div class="rack">
+      <section class="panel" id="grade-panel">
+        <h2>VExUS grade</h2>
+        <div class="grade"><b id="g-num">0</b><span id="g-txt"></span></div>
+        <div class="rows" id="g-rows"></div>
+        <div class="flag" id="g-flag"></div>
+      </section>
+
+      <section class="panel quiz" id="quiz-panel" hidden>
+        <h2>Quiz case</h2>
+        <p class="meas-empty" style="margin:0">IVC <b id="q-ivc"></b>. Read the three waveforms, then pick the grade.</p>
+        <div class="seg" id="q-ans"><button data-v="0">0</button><button data-v="1">1</button><button data-v="2">2</button><button data-v="3">3</button></div>
+        <div class="result" id="q-res" hidden></div>
+        <button class="btn" id="q-next" style="justify-self:start">Next case</button>
+      </section>
+
+      <section class="panel">
+        <h2>Settings</h2>
+        <div class="presets" id="pre">
+          <button data-p="0">Grade 0</button><button data-p="1">Grade 1</button><button data-p="2">Grade 2</button><button data-p="3">Grade 3</button><button data-p="quiz" id="quiz-btn">Quiz mode</button>
+        </div>
+        <div id="pattern-ctl">
+          <div class="ctl"><label for="ivc">IVC diameter</label><output id="ivc-o"></output><input type="range" id="ivc" min="0.8" max="3.0" step="0.05"></div>
+          <div class="ctl"><span class="lbl">Hepatic vein</span><output id="hv-o"></output>
+            <div class="seg" id="hv"><button data-v="n">S &gt; D</button><button data-v="m">S &lt; D</button><button data-v="s">S reversal</button></div></div>
+          <div class="ctl"><span class="lbl">Portal vein</span><output id="pv-o"></output>
+            <div class="seg" id="pv"><button data-v="n">PI &lt; 30%</button><button data-v="m">30 to 49%</button><button data-v="s">≥ 50%</button></div></div>
+          <div class="ctl"><span class="lbl">Intrarenal vein</span><output id="rv-o"></output>
+            <div class="seg" id="rv"><button data-v="n">Continuous</button><button data-v="m">Biphasic</button><button data-v="s">Mono D</button></div></div>
+        </div>
+        <div class="ctl"><span class="lbl">Rhythm</span><output id="rh-o"></output>
+          <div class="seg" id="rh"><button data-v="sinus">Sinus</button><button data-v="af">AF</button></div></div>
+        <div class="ctl"><label for="hr">Heart rate</label><output id="hr-o"></output><input type="range" id="hr" min="45" max="130" step="1"></div>
+        <div class="ctl"><label for="gain">Gain</label><output id="gain-o"></output><input type="range" id="gain" min="0.2" max="1.4" step="0.05"></div>
+        <div class="ctl"><span class="lbl">Sweep speed</span><output id="sw-o"></output>
+          <div class="seg" id="sweep"><button data-v="25">25</button><button data-v="50">50</button><button data-v="100">100</button></div></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="lower">
+    <section class="panel">
+      <h2>Your measurement</h2>
+      <div id="meas"><p class="meas-empty">Freeze the screen to measure.</p></div>
+    </section>
+    <section class="panel">
+      <h2>Grading reference</h2>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Grade</th><th>IVC</th><th>Doppler patterns</th></tr></thead>
+        <tbody>
+          <tr><td><b>0</b></td><td>&lt; 2 cm</td><td>Not graded further. No congestion.</td></tr>
+          <tr><td><b>1</b></td><td>≥ 2 cm</td><td>Any mix of normal and mildly abnormal</td></tr>
+          <tr><td><b>2</b></td><td>≥ 2 cm</td><td>One severely abnormal pattern</td></tr>
+          <tr><td><b>3</b></td><td>≥ 2 cm</td><td>Two or three severely abnormal patterns</td></tr>
+        </tbody>
+      </table></div>
+      <div class="tbl-wrap" style="margin-top:12px"><table>
+        <thead><tr><th></th><th>Normal</th><th>Mild</th><th>Severe</th></tr></thead>
+        <tbody>
+          <tr><td>Hepatic vein</td><td>S &gt; D</td><td>S &lt; D</td><td>S reversal</td></tr>
+          <tr><td>Portal vein</td><td>PI &lt; 30%</td><td>PI 30 to 49%</td><td>PI ≥ 50%</td></tr>
+          <tr><td>Intrarenal vein</td><td>Continuous</td><td>Biphasic, S and D</td><td>Monophasic, D only</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+    <section class="panel note" style="grid-column:1/-1">
+      <h2>How to acquire and read each view</h2>
+      <h3>Hepatic vein</h3>
+      <p>Subcostal or right lateral intercostal window. PW sample volume in the middle or right hepatic vein 1 to 2 cm from the IVC junction, with ECG on. Flow toward the heart sits below the baseline. The S wave falls after the QRS, the D wave after the T wave, and the small retrograde a wave sits above the baseline just before the next QRS. Severe tricuspid regurgitation also reverses S, independent of volume status.</p>
+      <h3>Portal vein</h3>
+      <p>Right intercostal window, main or right portal vein. Normal flow is continuous and hepatopetal, above the baseline. <span class="formula">PI = (Vmax − Vmin) / Vmax</span>. A value at or above 50%, including to-and-fro flow, is severe. Thin, healthy patients can show mild portal pulsatility without congestion, and cirrhosis can mask it.</p>
+      <h3>Intrarenal vein</h3>
+      <p>Posterior or lateral flank approach. Use color to find an interlobar vessel pair, then PW with a low scale so the artery shows above the baseline and the vein below. Normal venous flow is continuous. Congestion breaks it into separate S and D phases, then leaves only a diastolic D phase. Chronic kidney disease can alter these patterns.</p>
+      <h3>Rhythm</h3>
+      <p>Atrial fibrillation removes the a wave and often blunts the S wave, so the hepatic vein can look abnormal without congestion. Read the portal and renal patterns with that in mind.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(()=>{
+const W=900,H=200,HS=165,ECGB=192;
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const g=(x,c,w)=>Math.exp(-(((x-c)/w)**2));
+
+const STRIPS=[
+  {key:'hv',name:'HEPATIC VEIN',view:'Subcostal  MHV  SV 3mm',top:50,bot:-70},
+  {key:'pv',name:'PORTAL VEIN',view:'R intercostal  MPV  SV 3mm',top:50,bot:-25},
+  {key:'rv',name:'INTRARENAL',view:'Flank  interlobar  SV 3mm',top:60,bot:-45}
+];
+const LABEL={hv:{n:'S > D',m:'S < D',s:'S reversal'},pv:{n:'PI < 30%',m:'PI 30 to 49%',s:'PI ≥ 50%'},rv:{n:'Continuous',m:'Biphasic S and D',s:'Monophasic D'}};
+const SEV={n:'Normal',m:'Mild',s:'Severe'};
+const PRESETS={0:{ivc:1.4,hv:'n',pv:'n',rv:'n'},1:{ivc:2.3,hv:'m',pv:'m',rv:'n'},2:{ivc:2.5,hv:'s',pv:'m',rv:'m'},3:{ivc:2.7,hv:'s',pv:'s',rv:'s'}};
+const S={ivc:1.4,hv:'n',pv:'n',rv:'n',rh:'sinus',hr:80,gain:0.8,sweep:50,frozen:false,quiz:false,answered:false};
+
+// ---------- physiology ----------
+function timing(T){const s=Math.sqrt(clamp(T/0.75,0.55,1.4));const qt=0.4*Math.sqrt(T);
+  return {s,aT:T-0.12*Math.min(1,T/0.75),sC:0.19*s,vC:qt,dC:Math.min(qt+0.16*s,T-0.2)}}
+function hv(p,T,af){const t=timing(T);const P={n:{S:-38,D:-24,a:14,v:4},m:{S:-18,D:-34,a:17,v:6},s:{S:16,D:-40,a:22,v:7}}[S.hv];
+  const a=af?0:P.a,Sv=af?P.S*0.6:P.S;
+  return a*g(p,t.aT,.045)+a*g(p+T,t.aT,.045)+Sv*g(p,t.sC,.075*t.s)+P.v*g(p,t.vC,.035)+P.D*g(p,t.dC,.08*t.s)}
+function pvVel(p,T,af){const t=timing(T);const P={n:{V:22,pi:.15},m:{V:26,pi:.40},s:{V:28,pi:1.12}}[S.pv];
+  const ap=af?0:1;
+  let w=ap*(g(p,t.aT+.03,.07)+g(p+T,t.aT+.03,.07))+0.9*g(p,t.sC+.05,.08*t.s);
+  w=clamp(w,0,1);return P.V*(1-P.pi*w)}
+function rArt(p,T){const t=timing(T);const PSV=42,EDV=13;
+  const base=EDV*(1-0.35*clamp(p/T,0,1));return base+(PSV-EDV)*(p<0.13?g(p,.13,.045):g(p,.13,.07))+0.25*(PSV-EDV)*g(p,.28*t.s,.07)}
+function rVein(p,T,af){const t=timing(T);
+  if(S.rv==='n')return -(15+3*Math.sin(2*Math.PI*p/T));
+  if(S.rv==='m')return -(17*g(p,t.sC+.03,.07*t.s)+15*g(p,t.dC,.08*t.s));
+  return -(21*g(p,t.dC,.09*t.s))}
+function ecg(p,T,af){const qt=.4*Math.sqrt(T);let v=(af?0:g(p,T-.16,.025)*.15)+g(p,qt-.09,.045)*.3;
+  for(const q of[p,p-T])v+=g(q,-.025,.008)*-.12+g(q,0,.01)*1.1+g(q,.025,.009)*-.25;
+  if(af)v+=.04*Math.sin(p*41)+.03*Math.sin(p*67);return v}
+
+// ---------- strips ----------
+const screens=[...document.querySelectorAll('.screen')];
+const strips=STRIPS.map((d,i)=>{const sp=screens[i].querySelector('.sp'),ov=screens[i].querySelector('.ov');
+  return {...d,i,sp,ov,sctx:sp.getContext('2d'),octx:ov.getContext('2d'),col:sp.getContext('2d').createImageData(1,H),env:new Float32Array(W),env2:new Float32Array(W),prevE:ECGB}});
+const colTime=new Float64Array(W).fill(NaN);
+let simT=0,sweepX=0,acc=0,beatStart=0,beatLen=60/S.hr,last=performance.now();
+const pxPerSec=()=>W/(240/S.sweep);
+const yOfV=(st,v)=>(st.top-v)/(st.top-st.bot)*HS;
+const vOfY=(st,y)=>st.top-y/HS*(st.top-st.bot);
+function nextBeat(){const base=60/S.hr;return S.rh==='af'?base*(0.6+0.85*Math.random()):base}
+function lamI(v,e,spread){if(Math.abs(e)<1.2||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);
+  if(r>1)return .9*Math.exp(-(((r-1)/.05)**2));return .12+.88*Math.exp(-(((1-r)/spread)**2))}
+const meas={pts:[]};
+function resetAll(){strips.forEach(s=>{s.sctx.fillStyle='#000';s.sctx.fillRect(0,0,W,H)});colTime.fill(NaN);sweepX=0;acc=0;meas.pts=[]}
+function drawColumn(){
+  const dtc=1/pxPerSec();simT+=dtc;
+  if(simT>=beatStart+beatLen){beatStart+=beatLen;beatLen=nextBeat()}
+  const p=simT-beatStart,T=beatLen,af=S.rh==='af';
+  const resp=Math.sin(2*Math.PI*simT/4.5);
+  colTime[sweepX]=simT;
+  const sig=[
+    [hv(p,T,af)*(1+.12*resp)],
+    [pvVel(p,T,af)*(1-.08*resp)],
+    [rArt(p,T),rVein(p,T,af)*(1+.1*resp)]
+  ];
+  const G=S.gain*1.35,eY=Math.round(ECGB-ecg(p,T,af)*22);
+  strips.forEach((st,k)=>{
+    const comps=sig[k],d=st.col.data,N2=st.top-st.bot;
+    st.env[sweepX]=comps[0];st.env2[sweepX]=comps[1]??0;
+    const jit=comps.map(c=>c*(1+(Math.random()-.5)*.05));
+    for(let y=0;y<HS;y++){const v=vOfY(st,y+.5);let I=0;
+      jit.forEach((e,j)=>{const sp=(k===2&&j===0)?.22:.3;I+=lamI(v,e,sp)+lamI(v+N2,e,sp)+lamI(v-N2,e,sp)});
+      I*=(.35+Math.random());I=I*G+Math.random()*.06;
+      if(Math.abs(v)<2.2)I*=.25;
+      const c=Math.pow(clamp(I,0,1),.85)*255,o=y*4;d[o]=c;d[o+1]=c*.97;d[o+2]=c*.9;d[o+3]=255}
+    for(let y=HS;y<H;y++){const o=y*4;d[o]=d[o+1]=d[o+2]=0;d[o+3]=255}
+    const a=Math.min(eY,st.prevE),b=Math.max(eY,st.prevE);
+    for(let y=a;y<=b;y++){if(y<HS+2||y>=H)continue;const o=y*4;d[o]=70;d[o+1]=220;d[o+2]=120}
+    st.prevE=eY;
+    st.sctx.putImageData(st.col,sweepX,0);
+    st.sctx.fillStyle='#000';st.sctx.fillRect(sweepX+1,0,7,H);if(sweepX+8>=W)st.sctx.fillRect(0,0,sweepX+8-W,H);
+  });
+  for(let k=1;k<=7;k++)colTime[(sweepX+k)%W]=NaN;
+  sweepX=(sweepX+1)%W;
+}
+function drawOverlay(st){
+  const c=st.octx;c.clearRect(0,0,W,H);c.font='500 12px "IBM Plex Mono",monospace';
+  const y0=yOfV(st,0);c.strokeStyle='rgba(120,200,215,.7)';c.lineWidth=1;c.beginPath();c.moveTo(0,y0+.5);c.lineTo(W,y0+.5);c.stroke();
+  c.fillStyle='rgba(0,0,0,.55)';c.fillRect(W-54,0,54,HS);
+  c.strokeStyle='#9FB4BC';c.fillStyle='#CFE0E6';c.textAlign='right';c.textBaseline='middle';
+  for(let v=Math.ceil(st.bot/10)*10;v<=st.top;v+=10){const y=yOfV(st,v);if(y<22||y>HS-6)continue;const major=v%20===0;
+    c.beginPath();c.moveTo(W-54,y+.5);c.lineTo(W-54+(major?9:5),y+.5);c.stroke();if(major)c.fillText(String(v),W-6,y)}
+  c.fillText('cm/s',W-6,10);
+  c.textAlign='left';c.textBaseline='top';c.fillStyle='#7FD3DE';c.fillText(`PW  ${st.name}`,10,6);
+  c.fillStyle='#9FB4BC';c.fillText(`${st.view}   ${S.sweep} mm/s`,10,22);
+  if(!S.quiz||S.answered){c.textAlign='right';c.fillStyle='#F0A24B';c.fillText(LABEL[st.key][S[st.key]],W-64,6)}
+  if(st.key==='rv'){c.textAlign='left';c.fillStyle='#7C8F98';c.fillText('artery ▲  vein ▼',10,38)}
+  if(S.frozen&&st.i===0){c.textAlign='center';c.fillStyle='#F0A24B';c.font='600 14px "IBM Plex Mono",monospace';c.fillText('FROZEN',W/2,6);c.font='500 12px "IBM Plex Mono",monospace'}
+  c.fillStyle='#46DC78';c.textAlign='left';c.textBaseline='bottom';c.fillText(st.i===0?'II':'',10,H-4);
+  if(st.i===0){c.textAlign='right';c.fillText(`HR ${S.hr}${S.rh==='af'?'  AF':''}`,W-62,H-4)}
+  c.strokeStyle='#F0A24B';c.fillStyle='#F0A24B';c.lineWidth=1.5;c.textAlign='left';c.textBaseline='bottom';
+  meas.pts.forEach((pt,n)=>{if(pt.s!==st.i)return;c.beginPath();c.moveTo(pt.x-7,pt.y);c.lineTo(pt.x+7,pt.y);c.moveTo(pt.x,pt.y-7);c.lineTo(pt.x,pt.y+7);c.stroke();
+    c.fillText(`${n+1}: ${vOfY(st,pt.y).toFixed(0)} cm/s`,Math.min(pt.x+9,W-150),pt.y-3)});
+}
+
+// ---------- measurement ----------
+strips.forEach(st=>st.ov.addEventListener('pointerdown',e=>{
+  if(!S.frozen)return;const b=st.ov.getBoundingClientRect();
+  const pt={s:st.i,x:clamp((e.clientX-b.left)/b.width*W,0,W-1),y:clamp((e.clientY-b.top)/b.height*H,0,HS)};
+  if(meas.pts.length>=2)meas.pts=[];meas.pts.push(pt);renderMeas()}));
+const row=(k,v)=>`<div class="row"><span class="k">${k}</span><b>${v}</b></div>`;
+function renderMeas(){const el=$('meas');
+  if(!S.frozen){el.innerHTML='<p class="meas-empty">Freeze the screen to measure.</p>';return}
+  if(!meas.pts.length){el.innerHTML='<p class="meas-empty">Tap a point on any strip. For portal pulsatility, mark the peak and then the trough on the portal vein strip.</p>';return}
+  let h='';meas.pts.forEach((pt,n)=>{const st=strips[pt.s];h+=row(`Point ${n+1} · ${st.name.toLowerCase()}`,`${vOfY(st,pt.y).toFixed(1)} cm/s`)});
+  if(meas.pts.length===2){const[a,b]=meas.pts;const ta=colTime[Math.round(a.x)],tb=colTime[Math.round(b.x)];const dt=(tb-ta)*1000;
+    h+=row('Δ time',Number.isFinite(dt)?`${Math.abs(dt).toFixed(0)} ms`:'crosses sweep gap');
+    if(a.s===b.s){const st=strips[a.s],va=vOfY(st,a.y),vb=vOfY(st,b.y);
+      if(Math.abs(vb)>.5)h+=row('Ratio 1 : 2',Math.abs(va/vb).toFixed(2));
+      if(st.key==='pv'){const mx=Math.max(va,vb),mn=Math.min(va,vb);if(mx>0){const pi=(mx-mn)/mx*100;
+        const cat=pi<30?'n':pi<50?'m':'s';h+=row('Portal PI',`${pi.toFixed(0)}% <span class="pill ${cat}">${SEV[cat]}</span>`)}}}}
+  el.innerHTML=`<div class="rows">${h}</div>`}
+
+// ---------- grading ----------
+function grade(){if(S.ivc<2)return 0;const sev=['hv','pv','rv'].filter(k=>S[k]==='s').length;return sev===0?1:sev===1?2:3}
+const GTXT=['No congestion','Mild congestion','Moderate congestion','Severe congestion'];
+function renderGrade(){const gr=grade();$('g-num').textContent=gr;$('g-num').style.color=`var(--g${gr})`;$('g-txt').textContent=GTXT[gr];
+  let h=row('IVC',`${S.ivc.toFixed(1)} cm <span class="pill ${S.ivc>=2?'s':'n'}">${S.ivc>=2?'≥ 2 cm':'< 2 cm'}</span>`);
+  [['hv','Hepatic vein'],['pv','Portal vein'],['rv','Intrarenal vein']].forEach(([k,n])=>h+=row(n,`${LABEL[k][S[k]]} <span class="pill ${S[k]}">${SEV[S[k]]}</span>`));
+  $('g-rows').innerHTML=h;
+  let f='';if(S.ivc<2&&['hv','pv','rv'].some(k=>S[k]!=='n'))f='IVC under 2 cm makes this grade 0 even with abnormal Doppler patterns. Look for another cause, such as AF, cirrhosis or kidney disease. ';
+  if(S.rh==='af'&&S.hv!=='s')f+='AF removes the a wave and blunts S, so the hepatic vein can look abnormal without congestion.';
+  $('g-flag').textContent=f.trim()}
+
+// ---------- controls ----------
+function syncSeg(id,val,outId,txt){$(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==String(val))));if(outId)$(outId).textContent=txt}
+function syncAll(){$('ivc').value=S.ivc;$('ivc-o').textContent=`${S.ivc.toFixed(2)} cm`;
+  syncSeg('hv',S.hv,'hv-o',SEV[S.hv]);syncSeg('pv',S.pv,'pv-o',SEV[S.pv]);syncSeg('rv',S.rv,'rv-o',SEV[S.rv]);
+  syncSeg('rh',S.rh,'rh-o',S.rh==='af'?'AF':'Sinus');syncSeg('sweep',S.sweep,'sw-o',`${S.sweep} mm/s`);
+  $('hr').value=S.hr;$('hr-o').textContent=`${S.hr} bpm`;$('gain').value=S.gain;$('gain-o').textContent=`${Math.round(S.gain*100)}%`;
+  renderGrade()}
+['hv','pv','rv'].forEach(k=>$(k).addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S[k]=b.dataset.v;syncAll()}));
+$('rh').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.rh=b.dataset.v;syncAll()});
+$('sweep').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.sweep=+b.dataset.v;resetAll();prefill();syncAll()});
+$('ivc').addEventListener('input',e=>{S.ivc=parseFloat(e.target.value);syncAll()});
+$('hr').addEventListener('input',e=>{S.hr=parseInt(e.target.value);syncAll()});
+$('gain').addEventListener('input',e=>{S.gain=parseFloat(e.target.value);syncAll()});
+function setQuiz(on){S.quiz=on;S.answered=false;$('quiz-panel').hidden=!on;$('grade-panel').hidden=on;$('pattern-ctl').hidden=on;
+  $('quiz-btn').textContent=on?'Exit quiz':'Quiz mode';if(on)newCase();else syncAll();sendH()}
+function newCase(){const pick=a=>a[Math.floor(Math.random()*a.length)];
+  S.ivc=Math.random()<.2?+(1.2+Math.random()*.7).toFixed(1):+(2.0+Math.random()*.9).toFixed(1);
+  S.hv=pick(['n','m','s']);S.pv=pick(['n','m','s']);S.rv=pick(['n','m','s']);S.rh=Math.random()<.15?'af':'sinus';
+  S.answered=false;$('q-ivc').textContent=`${S.ivc.toFixed(1)} cm`;$('q-res').hidden=true;
+  $('q-ans').querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed','false'));syncAll();sendH()}
+$('q-next').addEventListener('click',newCase);
+$('q-ans').addEventListener('click',e=>{const b=e.target.closest('button');if(!b||S.answered)return;S.answered=true;
+  const ans=+b.dataset.v,gr=grade();b.setAttribute('aria-pressed','true');const r=$('q-res');r.hidden=false;
+  const sev=['hv','pv','rv'].filter(k=>S[k]==='s').length;
+  const why=S.ivc<2?'The IVC is under 2 cm, so the grade is 0 regardless of the Doppler patterns.':
+    `IVC ≥ 2 cm. Hepatic vein ${LABEL.hv[S.hv]} (${SEV[S.hv].toLowerCase()}), portal ${LABEL.pv[S.pv]} (${SEV[S.pv].toLowerCase()}), intrarenal ${LABEL.rv[S.rv].toLowerCase()} (${SEV[S.rv].toLowerCase()}). ${sev} severe pattern${sev===1?'':'s'}.`;
+  r.className='result '+(ans===gr?'ok':'bad');r.innerHTML=`<b>${ans===gr?'Correct':'Not quite'}: grade ${gr}.</b> ${why}`;sendH()});
+$('pre').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+  if(b.dataset.p==='quiz'){setQuiz(!S.quiz);return}
+  if(S.quiz)setQuiz(false);Object.assign(S,PRESETS[b.dataset.p]);syncAll()});
+function setFrozen(f){S.frozen=f;$('freeze').setAttribute('aria-pressed',String(f));$('freeze').textContent=f?'Unfreeze':'Freeze';$('clear').disabled=!f;if(!f)meas.pts=[];renderMeas()}
+$('freeze').addEventListener('click',()=>setFrozen(!S.frozen));
+$('clear').addEventListener('click',()=>{meas.pts=[];renderMeas()});
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();setFrozen(!S.frozen)}});
+
+// ---------- loop ----------
+function prefill(){for(let i=0;i<W-40;i++)drawColumn()}
+function frame(ts){const dt=Math.min(.05,(ts-last)/1000);last=ts;
+  if(!S.frozen){acc+=dt*pxPerSec();let n=0;while(acc>=1&&n<60){acc-=1;drawColumn();n++}}
+  strips.forEach(drawOverlay);requestAnimationFrame(frame)}
+resetAll();syncAll();prefill();requestAnimationFrame(frame);
+
+// ---------- embed height ----------
+function sendH(){try{parent.postMessage({vexusLabHeight:Math.ceil(document.querySelector('.wrap').getBoundingClientRect().height)},'*')}catch(e){}}
+addEventListener('load',sendH);addEventListener('resize',sendH);try{new ResizeObserver(sendH).observe(document.querySelector('.wrap'))}catch(e){}
+})();
+</script>
+</body>
+</html>
