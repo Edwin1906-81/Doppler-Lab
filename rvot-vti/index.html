@@ -1,0 +1,417 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>RVOT VTI Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+
+/* Layout: console page. Monitor dominates left, control rack right, readouts under the rack; stacks to one column on phones. */
+:root{
+  --bg:#EEF2F3; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#14212B; --muted:#5A6B76; --line:#CBD5D9;
+  --accent:#0A7484; --accent-ink:#FFFFFF; --amber:#A65A12; --warn:#B3261E; --ok:#2E7D4F;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.92rem}
+.tabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:8px;flex-wrap:wrap}
+.tab{font-family:var(--font-display);font-size:1.05rem;font-weight:600;letter-spacing:.03em;border:0;background:transparent;color:var(--muted);padding:6px 14px;border-radius:6px;cursor:pointer}
+.tab small{font-family:var(--font-mono);font-size:.7rem;font-weight:500;margin-left:6px;opacity:.8}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tab:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.monitor{background:#05080A;border-radius:10px;padding:10px;border:1px solid var(--line);min-width:0}
+.screen{position:relative;width:100%;aspect-ratio:900/400;max-width:100%}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:auto}
+#ov{touch-action:none}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{font-family:var(--font-body);font-size:.88rem;font-weight:500;border:1px solid #33454E;background:#111A1F;color:#D6E2E7;padding:6px 12px;border-radius:6px;cursor:pointer}
+.btn[aria-pressed="true"]{background:#49BFCD;border-color:#49BFCD;color:#06262B}
+.btn.freeze[aria-pressed="true"]{background:#F0A24B;border-color:#F0A24B;color:#2A1600}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.hint{color:#8EA3AD;font-size:.82rem;flex:1 1 220px;min-width:0}
+.rack{display:grid;gap:12px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h2{font-family:var(--font-display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-bottom:10px}
+.ctl label{font-size:.88rem;font-weight:500}
+.ctl output{font-family:var(--font-mono);font-size:.85rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.seg{grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap}
+.seg button{flex:1;font-family:var(--font-mono);font-size:.8rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 6px;border-radius:5px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.rows{display:grid;gap:0}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+.row:last-child{border-bottom:0}
+.row b{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .k{color:var(--muted)}
+.flag{font-size:.82rem;margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--sunk);border-left:3px solid var(--amber)}
+.flag:empty{display:none}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.lower{grid-template-columns:minmax(0,1fr)}}
+.note p{margin:0 0 8px;max-width:68ch}
+.note p:last-child{margin:0}
+.formula{font-family:var(--font-mono);font-size:.85rem;background:var(--sunk);padding:2px 6px;border-radius:4px}
+.meas-empty{color:var(--muted);font-size:.88rem;margin:0}
+.presets{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
+.presets button{font-size:.78rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 8px;border-radius:5px;cursor:pointer}
+.presets button:hover{border-color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+body{margin:0}[hidden]{display:none!important}img{max-width:100%}
+.presets button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.preset-label{font-size:.78rem;color:var(--muted);margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.row.bad b{color:var(--warn)}
+.row.good b{color:var(--ok)}
+.step{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+.step:last-child{border-bottom:0}
+.step .ic{font-family:var(--font-mono);font-weight:600;text-align:center}
+.step.y .ic{color:var(--warn)} .step.n .ic{color:var(--ok)} .step.s .ic{color:var(--muted)}
+.verdict{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--sunk);border-left:4px solid var(--accent);font-weight:600}
+.verdict small{display:block;font-weight:400;color:var(--muted);margin-top:2px}
+.tabs:has(.tab:only-child){display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>RVOT VTI Lab</h1>
+      <p class="sub">PW in the RV outflow tract. Trace RVOT VTI for RV stroke volume and output, and read the envelope shape and its respiratory variation.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Doppler study"><button class="tab" role="tab" data-mode="rvot">RVOT VTI<small>PW</small></button></div>
+  </header>
+
+  <div class="main">
+    <div class="monitor">
+      <div class="screen">
+        <canvas id="spec" width="900" height="400" aria-label="Spectral Doppler display"></canvas>
+        <canvas id="ov" width="900" height="400" aria-hidden="true"></canvas>
+      </div>
+      <div class="toolbar">
+        <button class="btn freeze" id="freeze" aria-pressed="false">Freeze</button>
+        <button class="btn" id="tool-caliper" aria-pressed="true" disabled>Caliper</button>
+        <button class="btn" id="tool-trace" aria-pressed="false" disabled>Trace</button>
+        <button class="btn" id="clear" disabled>Clear</button>
+        <button class="btn" id="env" aria-pressed="false">Show true envelope</button>
+        <span class="hint">Space bar freezes. Caliper: tap up to two points. Trace: drag along one envelope.</span>
+      </div>
+    </div>
+
+    <div class="rack">
+      <section class="panel">
+        <h2>Settings</h2>
+<div class="mode-ctl" data-modes="rvot"><p class="preset-label">Scenario</p><div class="presets"><button data-preset="normal">Normal</button><button data-preset="pe">Acute PE</button><button data-preset="pah">PAH</button><button data-preset="hypo">Hypovolemic, ventilated</button><button data-preset="ppv">Ventilated</button></div><div class="ctl"><label for="rvti">RVOT VTI</label><output id="rvti-o"></output><input type="range" id="rvti" min="5" max="26" step="0.5"></div><div class="ctl"><label for="rvd">RVOT diameter</label><output id="rvd-o"></output><input type="range" id="rvd" min="1.6" max="3" step="0.05"></div><div class="ctl"><label>Notching</label><output id="notch-o"></output><div class="seg" id="notch"><button data-v="none">None</button><button data-v="mid">Mid</button><button data-v="late">Late</button></div></div><div class="ctl"><label>Breathing</label><output id="vent-o"></output><div class="seg" id="vent"><button data-v="spont">Spontaneous</button><button data-v="ppv">Ventilated</button></div></div><div class="ctl"><label for="resp">Respiratory variation</label><output id="resp-o"></output><input type="range" id="resp" min="0" max="30" step="1"></div></div>
+        <div class="ctl"><label for="hr">Heart rate</label><output id="hr-o"></output><input type="range" id="hr" min="40" max="150" step="1"></div>
+        <div class="ctl"><label for="ang">Insonation angle</label><output id="ang-o"></output><input type="range" id="ang" min="0" max="45" step="1"></div>
+        <div class="ctl"><label for="scl">Velocity scale</label><output id="scl-o"></output><input type="range" id="scl" min="0.6" max="1.6" step="0.05"></div>
+        <div class="ctl"><label for="gain">Gain</label><output id="gain-o"></output><input type="range" id="gain" min="0.2" max="1.4" step="0.05"></div>
+        <div class="ctl"><label>Sweep speed</label><output id="sweep-o"></output>
+          <div class="seg" id="sweep"><button data-v="50">50</button><button data-v="75">75</button><button data-v="100">100</button></div></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="lower">
+    <section class="panel">
+      <h2>Machine calculations</h2>
+      <div class="rows" id="calc"></div>
+      <div class="flag" id="calc-flag"></div>
+    </section>
+    <section class="panel">
+      <h2>Your measurement</h2>
+      <div id="meas"><p class="meas-empty">Freeze the screen to measure.</p></div>
+    </section>
+
+    <section class="panel note" style="grid-column:1/-1">
+      <h2>How to acquire and measure</h2>
+      <div id="note"></div>
+    </section>
+  </div>
+</div>
+<script>
+window.LAB=(()=>{
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const lvShape=x=>{if(x<=0||x>=1)return 0;const pk=.33;return x<pk?Math.pow(Math.sin(Math.PI/2*x/pk),1.1):Math.pow(Math.cos(Math.PI/2*(x-pk)/(1-pk)),1.4)};
+const trShape=x=>{if(x<=0||x>=1)return 0;return Math.pow(Math.sin(Math.PI*Math.pow(x,.85)),.4)};
+const integ=(fn,n=1500)=>{let s=0;for(let i=0;i<n;i++)s+=fn((i+.5)/n)/n;return s};
+const LV_INT=integ(lvShape);
+const ET=hr=>clamp((413-1.7*hr)/1000,.16,.36);
+const PRE=0.06;
+function eWave(dt,E,DTs){const AT=.08;if(dt<0)return 0;if(dt<AT)return E*Math.sin(Math.PI/2*dt/AT);const d=(dt-AT)/DTs;return d<1?E*(1-d):0}
+function inflow(p,T,et,E,A,DTms){
+  const tE=PRE+et+.08;let e=eWave(p-tE,E,DTms/1000);
+  const tA=Math.max(T-.15,tE+.03),aDur=Math.max(.05,T-.02-tA);
+  let a=0;if(p>=tA&&p<=tA+aDur)a=A*Math.sin(Math.PI*(p-tA)/aDur);
+  return {v:a>0?Math.max(e,a+.5*e):e,tE,tAend:tA+aDur,tA,aDur};
+}
+const g=(x,c,w,a)=>a*Math.exp(-(((x-c)/w)**2));
+function ecg(p,T){
+  const qt=.4*Math.sqrt(T);let v=g(p,T-.16,.025,.15)+g(p,qt-.09,.045,.3);
+  for(const q of[p,p-T])v+=g(q,-.025,.008,-.12)+g(q,0,.01,1.1)+g(q,.025,.009,-.25);
+  return v;
+}
+const f2=(x,n=2)=>Number.isFinite(x)?x.toFixed(n):'n/a';
+const row=(k,v,cls)=>`<div class="row${cls?' '+cls:''}"><span class="k">${k}</span><b>${v}</b></div>`;
+const memo=fn=>{const c=new Map();return k=>{if(!c.has(k))c.set(k,fn(k));return c.get(k)}};
+return {clamp,lvShape,trShape,integ,LV_INT,ET,PRE,eWave,inflow,g,ecg,f2,row,memo};
+})();
+
+</script>
+<script>
+window.PASHAPE=(()=>{
+const {integ,memo}=window.LAB;
+function paShape(x,a,notch){
+  if(x<=0||x>=1)return 0;
+  let v=x<a?Math.sin(Math.PI/2*x/a):Math.pow(Math.cos(Math.PI/2*(x-a)/(1-a)),1.1);
+  if(notch==='mid')v*=1-.78*Math.exp(-(((x-(a+.2))/.075)**2));
+  if(notch==='late')v*=1-.5*Math.exp(-(((x-.8)/.05)**2));
+  return v;
+}
+const INT=memo(k=>{const [a,n]=k.split('|');return integ(x=>paShape(x,+a,n))});
+const intOf=(a,n)=>INT((Math.round(a*200)/200).toFixed(3)+'|'+n);
+return {paShape,intOf};
+})();
+
+window.PAGE=(()=>{
+const L=window.LAB,{clamp,ET,PRE,f2,row}=L,{paShape,intOf}=window.PASHAPE;
+const PV=PRE+.02;
+const et=S=>ET(S.hr)*1.08;
+const aOf=S=>S.rv.notch==='mid'?.26:S.rv.notch==='late'?.36:S.rv.a;
+const vmax=S=>S.rv.vti/(et(S)*intOf(aOf(S),S.rv.notch));
+const respK=(t,S)=>{const amp=S.rv.resp/200,ph=S.rv.vent==='spont'?1:-1;return 1+ph*amp*Math.sin(2*Math.PI*t/4.5)};
+return {
+  modes:[{id:'rvot',kind:'PW',name:'RVOT',view:'PSAX  AV level  SV 3mm',top:40,bottom:-120,dir:-1,tick:20,lab:20}],
+  state:{rv:{vti:18,d:2.2,notch:'none',resp:8,vent:'spont',a:.45}},
+  resp:(t,S)=>respK(t,S),
+  model(p,T,S){const e=et(S);return {main:-vmax(S)*paShape((p-PV)/e,aOf(S),S.rv.notch),clicks:[PV+e]}},
+  bind(a){const S=a.S;
+    a.bindRange('rvti',()=>S.rv.vti,v=>S.rv.vti=v,v=>`${v.toFixed(1)} cm`);
+    a.bindRange('rvd',()=>S.rv.d,v=>S.rv.d=v,v=>`${v.toFixed(2)} cm`);
+    a.bindRange('resp',()=>S.rv.resp,v=>S.rv.resp=v,v=>`${v}%`);
+    a.bindSeg('vent',()=>S.rv.vent,v=>S.rv.vent=v,v=>v==='spont'?'Spontaneous':'Positive pressure');
+    a.bindSeg('notch',()=>S.rv.notch,v=>S.rv.notch=v,v=>({none:'None',mid:'Mid-systolic',late:'Late systolic'})[v]);
+  },
+  calc(S){
+    const cosA=Math.cos(S.ang*Math.PI/180),vti=S.rv.vti*cosA,A=Math.PI*(S.rv.d/2)**2,sv=vti*A,e=et(S);
+    const hi=vti*(1+S.rv.resp/200),lo=vti*(1-S.rv.resp/200);
+    let h=row('RVOT VTI (mean)',`${f2(vti,1)} cm`)+row('Peak velocity',`${f2(vmax(S)*cosA/100)} m/s`)+row('Acceleration time',`${f2(aOf(S)*e*1000,0)} ms`)+row('RVOT area π(D/2)²',`${f2(A)} cm²`)+row('RV stroke volume',`${f2(sv,0)} mL`)+row('RV output',`${f2(sv*S.hr/1000,1)} L/min`)+row('VTI max / min',`${f2(hi,1)} / ${f2(lo,1)} cm`)+row('Respiratory ΔVTI',`${f2((hi-lo)/((hi+lo)/2)*100,0)}%`);
+    let flag='';
+    if(vti<10)flag='RVOT VTI under 10 cm: low RV stroke volume. In pulmonary hypertension and acute PE a low RVOT VTI tracks with worse outcomes. ';
+    else if(vti>=15)flag='RVOT VTI in the usual normal range (about 15 to 20 cm). ';
+    else flag='Borderline RVOT VTI. Trend it after each intervention rather than reading a single value. ';
+    if(S.rv.notch==='mid')flag+='Mid-systolic notch with a short acceleration time: early wave reflection from a high-resistance pulmonary bed (precapillary PH, acute PE). ';
+    if(S.rv.notch==='late')flag+='Late systolic notch: milder elevation in PVR or postcapillary PH. ';
+    if(S.rv.vent==='ppv'&&S.rv.resp>=15)flag+='Large cyclic variation under positive pressure: inspiration loads the RV and can unmask preload or afterload sensitivity. ';
+    if(S.ang>0)flag+=`At ${S.ang}° the VTI reads ${f2((1-cosA)*100,0)}% low.`;
+    return {html:h,flag};
+  },
+  traceExtra({vti},S){const A=Math.PI*(S.rv.d/2)**2;return row('RV SV from your trace',`${f2(vti*A,0)} mL`)+row('RV output from your trace',`${f2(vti*A*S.hr/1000,1)} L/min`)},
+  applyPreset(k,a){const S=a.S;const P={normal:[18,'none',8,'spont',.45],pe:[8.5,'mid',6,'spont',.3],pah:[10.5,'mid',6,'spont',.3],hypo:[11,'none',22,'ppv',.42],ppv:[16,'none',12,'ppv',.42]}[k];
+    a.setRange('rvti',P[0]);S.rv.notch=P[1];a.setRange('resp',P[2]);S.rv.vent=P[3];S.rv.a=P[4];a.syncSegs()},
+  notes:{rvot:`<p>PW sample volume in the RVOT just proximal to the pulmonic valve, parasternal short axis at the aortic valve level (or a modified parasternal long axis tilted to the RVOT). Align the beam with flow; the pulmonic closing click should be visible and the opening click absent.</p><p>Trace the modal velocity from baseline to baseline for RVOT VTI. <span class="formula">RV SV = VTI × π(D/2)²</span>, with D measured at the same level in early systole. The shape matters as much as the number: a short acceleration time or a notch points to a high-resistance pulmonary circulation (see the PA acceleration time lab). Compare with the LVOT VTI; in acute PE an LVOT VTI ≤ 15 cm is linked to adverse outcomes.</p>`}
+};})();
+
+</script>
+<script>
+(()=>{
+const P=window.PAGE;
+const W=900,H=400,HS=330,ECG0=342;
+const spec=document.getElementById('spec'),sctx=spec.getContext('2d');
+const ov=document.getElementById('ov'),octx=ov.getContext('2d');
+const $=id=>document.getElementById(id);
+const MODES={};P.modes.forEach(m=>MODES[m.id]=m);
+const S=Object.assign({mode:P.modes[0].id,hr:72,ang:0,scl:1,gain:0.8,sweep:100,frozen:false,tool:'caliper',showEnv:false},P.state);
+const L=window.LAB;
+
+// ---------- sweep buffer ----------
+let colTime=new Float64Array(W).fill(NaN),colEnv=new Float32Array(W),colTrue=new Float32Array(W),colBeat=new Int32Array(W);
+let simT=0,sweepX=0,acc=0,beatStart=0,beatLen=60/S.hr,beatId=0,prevEcgY=ECG0+40,last=performance.now();
+const col=sctx.createImageData(1,H);
+const range=()=>{const m=MODES[S.mode];return {top:m.top*S.scl,bot:m.bottom*S.scl}};
+const yOfV=v=>{const r=range();return (r.top-v)/(r.top-r.bot)*HS};
+const vOfY=y=>{const r=range();return r.top-y/HS*(r.top-r.bot)};
+const pxPerSec=()=>W/(240/S.sweep);
+function resetBuffer(){sctx.fillStyle='#000';sctx.fillRect(0,0,W,H);colTime.fill(NaN);sweepX=0;acc=0;measure.pts=[];measure.trace=[];}
+const clamp=L.clamp;
+function lamI(v,e,w){if(Math.abs(e)<1||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);if(r>1)return .9*Math.exp(-(((r-1)/.035)**2));return .1+.9*Math.exp(-(((1-r)/(w||.17))**2))}
+function tdiI(v,e){if(Math.abs(e)<.3||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);if(r>1)return Math.exp(-(((r-1)/.06)**2));return .05+.95*Math.exp(-(((1-r)/.12)**2))}
+function cwI(v,e){if(Math.abs(e)<1||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);if(r>1)return Math.exp(-(((r-1)/.025)**2));return .3+.7*r*r}
+function drawColumn(){
+  const pps=pxPerSec(),dtc=1/pps;simT+=dtc;
+  if(simT>=beatStart+beatLen){beatStart+=beatLen;beatLen=60/S.hr;beatId++}
+  const p=simT-beatStart,T=beatLen,m=MODES[S.mode];
+  const resp=P.resp?P.resp(simT,S):1+(m.resp||.03)*Math.sin(2*Math.PI*simT/4.2);
+  const md=P.model(p,T,S,m);const cosA=Math.cos(S.ang*Math.PI/180);
+  const trueMain=md.main*resp,disp=trueMain*cosA,sec=(md.second||0)*cosA*resp;
+  colTime[sweepX]=simT;colEnv[sweepX]=disp;colTrue[sweepX]=trueMain;colBeat[sweepX]=beatId;
+  const ej=disp*(1+(Math.random()-.5)*.035),r=range(),N2=r.top-r.bot,kind=m.kind;
+  const clicks=md.clicks||[];const click=clicks.some(c=>Math.abs(p-c)<dtc*1.6);
+  const faint=md.faint,G=S.gain*1.35*(m.gainK||1),d=col.data;
+  for(let y=0;y<HS;y++){
+    const v=vOfY(y+.5);let I;
+    if(kind==='PW'){I=lamI(v,ej)+lamI(v+N2,ej)+lamI(v-N2,ej)}
+    else if(kind==='TDI'){I=tdiI(v,ej)+tdiI(v+N2,ej)+tdiI(v-N2,ej)}
+    else{I=cwI(v,ej);if(faint){I*=Math.random()<.5?0:.4}
+      if(md.secondEdge)I+=.8*lamI(v,sec,.08);else I+=(md.secondK||.4)*cwI(v,sec)}
+    I*=(.35+Math.random());
+    if(click&&Math.abs(v)<.55*Math.max(r.top,-r.bot))I+=.5+.5*Math.random();
+    I=I*G+Math.random()*.06;
+    if(Math.abs(v)<N2*.008)I*=.3;
+    const c=Math.pow(clamp(I,0,1),.85)*255,o=y*4;d[o]=c;d[o+1]=c*.97;d[o+2]=c*.9;d[o+3]=255;
+  }
+  for(let y=HS;y<H;y++){const o=y*4;d[o]=d[o+1]=d[o+2]=0;d[o+3]=255}
+  const ey=Math.round(ECG0+40-L.ecg(p,T)*36),a=Math.min(ey,prevEcgY),b=Math.max(ey,prevEcgY);
+  for(let y=a;y<=b;y++){if(y<HS||y>=H)continue;const o=y*4;d[o]=70;d[o+1]=220;d[o+2]=120}
+  prevEcgY=ey;
+  sctx.putImageData(col,sweepX,0);
+  sctx.fillStyle='#000';sctx.fillRect(sweepX+1,0,7,H);if(sweepX+8>=W)sctx.fillRect(0,0,sweepX+8-W,H);
+  for(let k=1;k<=7;k++)colTime[(sweepX+k)%W]=NaN;
+  sweepX=(sweepX+1)%W;
+}
+
+// ---------- overlay ----------
+const measure={pts:[],trace:[],drawing:false};
+function drawOverlay(){
+  const c=octx,m=MODES[S.mode],r=range();c.clearRect(0,0,W,H);
+  c.font='500 13px "IBM Plex Mono",monospace';
+  const y0=yOfV(0);c.strokeStyle='rgba(120,200,215,.7)';c.lineWidth=1;c.beginPath();c.moveTo(0,y0+.5);c.lineTo(W,y0+.5);c.stroke();
+  c.fillStyle='rgba(0,0,0,.55)';c.fillRect(W-58,0,58,HS);
+  c.strokeStyle='#9FB4BC';c.fillStyle='#CFE0E6';c.textAlign='right';c.textBaseline='middle';
+  const step=m.tick*(S.scl>1.25&&m.kind==='CW'?2:1),lab=m.lab*(S.scl>1.25&&m.kind==='CW'?2:1),tdi=m.kind==='TDI';
+  for(let v=Math.ceil(r.bot/step)*step;v<=r.top+1e-6;v+=step){
+    const y=yOfV(v);if(y<6||y>HS-6)continue;const major=Math.abs(Math.round(v*1000)%Math.round(lab*1000))<1;
+    c.beginPath();c.moveTo(W-58,y+.5);c.lineTo(W-58+(major?10:5),y+.5);c.stroke();
+    if(major)c.fillText(tdi?Math.round(v).toString():(v/100).toFixed(m.kind==='CW'?0:1),W-6,y);
+  }
+  c.fillText(tdi?'cm/s':'m/s',W-6,HS-10);
+  c.textAlign='left';c.textBaseline='top';c.fillStyle='#7FD3DE';
+  c.fillText(`${tdi?'TDI':m.kind}  ${m.name}  ${m.view}`,10,8);
+  c.fillStyle='#9FB4BC';
+  const nyq=m.kind==='CW'?'n/a':(tdi?((r.top-r.bot)/2).toFixed(0)+' cm/s':((r.top-r.bot)/200).toFixed(2)+' m/s');
+  c.fillText(`${S.sweep} mm/s   angle ${S.ang}°   Nyq ${nyq}`,10,26);
+  c.fillStyle='#46DC78';c.fillText('II',10,HS+8);c.textAlign='right';c.fillText(`HR ${S.hr}`,W-66,HS+8);
+  if(S.frozen){c.textAlign='center';c.fillStyle='#F0A24B';c.font='600 15px "IBM Plex Mono",monospace';c.fillText('FROZEN',W/2,8);c.font='500 13px "IBM Plex Mono",monospace'}
+  if(S.showEnv){
+    c.strokeStyle='rgba(73,191,205,.95)';c.lineWidth=1.5;c.setLineDash([4,3]);c.beginPath();let pen=false;
+    for(let x=0;x<W;x++){if(isNaN(colTime[x])||(x>0&&Math.abs(colTime[x]-colTime[x-1])>.05)){pen=false;continue}
+      const y=yOfV(colEnv[x]);if(!pen){c.moveTo(x,y);pen=true}else c.lineTo(x,y)}
+    c.stroke();c.setLineDash([]);
+  }
+  c.strokeStyle='#F0A24B';c.fillStyle='#F0A24B';c.lineWidth=1.5;c.textAlign='left';c.textBaseline='bottom';
+  measure.pts.forEach((pt,i)=>{
+    c.beginPath();c.moveTo(pt.x-8,pt.y);c.lineTo(pt.x+8,pt.y);c.moveTo(pt.x,pt.y-8);c.lineTo(pt.x,pt.y+8);c.stroke();
+    const v=vOfY(pt.y);c.fillText(tdi?`${i+1}: ${v.toFixed(1)} cm/s`:`${i+1}: ${(v/100).toFixed(2)} m/s`,Math.min(pt.x+10,W-170),pt.y-4);
+  });
+  if(measure.pts.length===2){c.setLineDash([3,3]);c.beginPath();c.moveTo(measure.pts[0].x,measure.pts[0].y);c.lineTo(measure.pts[1].x,measure.pts[1].y);c.stroke();c.setLineDash([])}
+  if(measure.trace.length>1){c.beginPath();measure.trace.forEach((pt,i)=>i?c.lineTo(pt.x,pt.y):c.moveTo(pt.x,pt.y));c.stroke()}
+}
+
+// ---------- measurement ----------
+function toCanvas(e){const b=ov.getBoundingClientRect();return {x:clamp((e.clientX-b.left)/b.width*W,0,W-1),y:clamp((e.clientY-b.top)/b.height*H,0,HS)}}
+ov.addEventListener('pointerdown',e=>{
+  if(!S.frozen)return;const pt=toCanvas(e);
+  if(S.tool==='caliper'){if(measure.pts.length>=2)measure.pts=[];measure.pts.push(pt);renderMeasure()}
+  else{measure.trace=[pt];measure.drawing=true;ov.setPointerCapture(e.pointerId)}
+});
+ov.addEventListener('pointermove',e=>{if(measure.drawing)measure.trace.push(toCanvas(e))});
+ov.addEventListener('pointerup',()=>{if(measure.drawing){measure.drawing=false;renderMeasure()}});
+const f2=L.f2,row=L.row;
+function renderMeasure(){
+  const el=$('meas'),m=MODES[S.mode],tdi=m.kind==='TDI';
+  if(!S.frozen){el.innerHTML='<p class="meas-empty">Freeze the screen to measure.</p>';return}
+  if(S.tool==='caliper'){
+    if(!measure.pts.length){el.innerHTML=`<p class="meas-empty">${P.caliperHint?P.caliperHint(S):'Tap a point on the spectrum. Two points give a time interval and ratio.'}</p>`;return}
+    let h='';measure.pts.forEach((pt,i)=>{const v=vOfY(pt.y);h+=row(`Point ${i+1}`,tdi?`${f2(Math.abs(v),1)} cm/s`:`${f2(Math.abs(v/100))} m/s · ${f2(4*(v/100)**2,0)} mmHg`)});
+    if(measure.pts.length===2){
+      const [a,b]=measure.pts,ta=colTime[Math.round(a.x)],tb=colTime[Math.round(b.x)],va=vOfY(a.y),vb=vOfY(b.y);
+      const dt=(tb-ta)*1000;h+=row('Δ time',Number.isFinite(dt)?`${f2(Math.abs(dt),0)} ms`:'crosses sweep gap');
+      h+=row('Ratio 1 : 2',Math.abs(vb)>(tdi?.2:1)?f2(Math.abs(va/vb)):'n/a');
+      if(P.caliperExtra)h+=P.caliperExtra({va,vb,dt},S);
+    }else if(P.caliperExtra1){h+=P.caliperExtra1({va:vOfY(measure.pts[0].y)},S)}
+    el.innerHTML=`<div class="rows">${h}</div>`;return;
+  }
+  let pts=measure.trace.map(p=>({t:colTime[Math.round(p.x)],v:vOfY(p.y),x:p.x})).filter(p=>Number.isFinite(p.t)&&p.v*m.dir>0);
+  pts.sort((a,b)=>a.t-b.t);
+  if(pts.length<4){el.innerHTML='<p class="meas-empty">Drag along the outer edge of one beat, starting and ending at the baseline.</p>';return}
+  let segs=[[pts[0]]];for(let i=1;i<pts.length;i++){if(pts[i].t-pts[i-1].t>.05)segs.push([]);segs[segs.length-1].push(pts[i])}
+  pts=segs.sort((a,b)=>b.length-a.length)[0];
+  let vti=0,pk=0,mg=0,tpk=0;for(let i=1;i<pts.length;i++){const dt=pts[i].t-pts[i-1].t,a=Math.abs(pts[i].v),b=Math.abs(pts[i-1].v);vti+=(a+b)/2*dt;mg+=2*((a/100)**2+(b/100)**2)*dt}
+  pts.forEach(p=>{if(Math.abs(p.v)>pk){pk=Math.abs(p.v);tpk=p.t}});const dur=pts[pts.length-1].t-pts[0].t;
+  const mid=Math.round(pts[Math.floor(pts.length/2)].x),bid=colBeat[mid];
+  let tv=0,tt=0;const dc=1/pxPerSec();
+  for(let x=0;x<W;x++){if(isNaN(colTime[x])||colBeat[x]!==bid||colEnv[x]*m.dir<=0)continue;tv+=Math.abs(colEnv[x])*dc;tt+=Math.abs(colTrue[x])*dc}
+  let h=row('Your VTI',`${f2(vti,1)} cm`)+row('Your peak',`${f2(pk/100)} m/s`)+row('Duration',`${f2(dur*1000,0)} ms`)+row('Time to peak',`${f2((tpk-pts[0].t)*1000,0)} ms`)+row('Mean gradient',`${f2(mg/Math.max(dur,1e-3),1)} mmHg`);
+  h+=row('Screen envelope VTI, this beat',`${f2(tv,1)} cm`);
+  if(S.ang>0)h+=row('Actual VTI (angle corrected)',`${f2(tt,1)} cm`);
+  const err=tv>0?(vti-tv)/tv*100:NaN;h+=row('Tracing error vs screen',`${err>0?'+':''}${f2(err,0)}%`);
+  if(P.traceExtra)h+=P.traceExtra({vti,pk,mg:mg/Math.max(dur,1e-3),dur,ttp:tpk-pts[0].t},S);
+  el.innerHTML=`<div class="rows">${h}</div>`;
+}
+
+// ---------- calculations ----------
+function renderCalc(){
+  const out=P.calc(S,S.mode);
+  $('calc').innerHTML=out.html;$('calc-flag').textContent=(out.flag||'').trim();
+  if(out.extra!==undefined&&$('extra'))$('extra').innerHTML=out.extra;
+}
+
+// ---------- controls ----------
+function bindRange(id,get,set,fmt){const el=$(id),o=$(id+'-o');if(!el)return;el.value=get();o.textContent=fmt(get());el.addEventListener('input',()=>{set(parseFloat(el.value));o.textContent=fmt(get());renderCalc()})}
+function syncRange(id){const el=$(id);if(el)el.dispatchEvent(new Event('input'))}
+const segSyncs=[];
+function bindSeg(id,get,set,fmt,after){const el=$(id),o=$(id+'-o');if(!el)return;
+  const sync=()=>{el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==String(get()))));if(o)o.textContent=fmt(get())};
+  el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.v);sync();renderCalc();after&&after()});sync();segSyncs.push(sync)}
+const api={S,bindRange,bindSeg,syncRange,renderCalc,resetBuffer,syncSegs:()=>segSyncs.forEach(f=>f()),setRange:(id,v)=>{const el=$(id);if(el){el.value=v;el.dispatchEvent(new Event('input'))}}};
+P.bind(api);
+bindRange('hr',()=>S.hr,v=>S.hr=v,v=>`${v} bpm`);
+bindRange('ang',()=>S.ang,v=>S.ang=v,v=>`${v}°`);
+bindRange('gain',()=>S.gain,v=>S.gain=v,v=>`${Math.round(v*100)}%`);
+bindRange('scl',()=>S.scl,v=>S.scl=v,v=>`${v.toFixed(2)}×`);$('scl').addEventListener('change',resetBuffer);
+bindSeg('sweep',()=>S.sweep,v=>S.sweep=+v,v=>`${v} mm/s`,resetBuffer);
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{P.applyPreset(b.dataset.preset,api);
+  b.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderCalc();}));
+
+function setMode(m){S.mode=m;document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected',String(t.dataset.mode===m)));
+  document.querySelectorAll('.mode-ctl').forEach(c=>{const ms=(c.dataset.modes||'').split(' ');c.hidden=!ms.includes(m)});
+  $('note').innerHTML=P.notes[m];resetBuffer();if(S.frozen)setFrozen(false);renderCalc();renderMeasure();
+  try{history.replaceState(null,'','#'+m)}catch(e){}}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setMode(t.dataset.mode)));
+function setFrozen(f){S.frozen=f;$('freeze').setAttribute('aria-pressed',String(f));$('freeze').textContent=f?'Unfreeze':'Freeze';
+  ['tool-caliper','tool-trace','clear'].forEach(id=>$(id).disabled=!f);if(!f){measure.pts=[];measure.trace=[]}renderMeasure()}
+$('freeze').addEventListener('click',()=>setFrozen(!S.frozen));
+function setTool(t){S.tool=t;$('tool-caliper').setAttribute('aria-pressed',String(t==='caliper'));$('tool-trace').setAttribute('aria-pressed',String(t==='trace'));measure.pts=[];measure.trace=[];renderMeasure()}
+$('tool-caliper').addEventListener('click',()=>setTool('caliper'));$('tool-trace').addEventListener('click',()=>setTool('trace'));
+$('clear').addEventListener('click',()=>{measure.pts=[];measure.trace=[];renderMeasure()});
+$('env').addEventListener('click',()=>{S.showEnv=!S.showEnv;$('env').setAttribute('aria-pressed',String(S.showEnv))});
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();setFrozen(!S.frozen)}});
+
+function frame(ts){const dt=Math.min(.05,(ts-last)/1000);last=ts;
+  if(!S.frozen){acc+=dt*pxPerSec();let n=0;while(acc>=1&&n<60){acc-=1;drawColumn();n++}}
+  drawOverlay();requestAnimationFrame(frame)}
+const start=(location.hash||'').slice(1);setMode(MODES[start]?start:P.modes[0].id);
+for(let i=0;i<W-40;i++)drawColumn();
+requestAnimationFrame(frame);
+window.__lab={S,model:P.model,calc:P.calc,api};
+})();
+
+</script>
+<script>(function(){function s(){try{parent.postMessage({labHeight:Math.ceil(document.querySelector(".wrap").getBoundingClientRect().height),lab:"rvot-vti"},"*")}catch(e){}}addEventListener("load",s);addEventListener("resize",s);new ResizeObserver(s).observe(document.body)})();</script>
+</body>
+</html>
