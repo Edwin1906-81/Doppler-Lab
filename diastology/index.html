@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Diastology Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+
+/* Layout: console page. Monitor dominates left, control rack right, readouts under the rack; stacks to one column on phones. */
+:root{
+  --bg:#EEF2F3; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#14212B; --muted:#5A6B76; --line:#CBD5D9;
+  --accent:#0A7484; --accent-ink:#FFFFFF; --amber:#A65A12; --warn:#B3261E; --ok:#2E7D4F;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.92rem}
+.tabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:8px;flex-wrap:wrap}
+.tab{font-family:var(--font-display);font-size:1.05rem;font-weight:600;letter-spacing:.03em;border:0;background:transparent;color:var(--muted);padding:6px 14px;border-radius:6px;cursor:pointer}
+.tab small{font-family:var(--font-mono);font-size:.7rem;font-weight:500;margin-left:6px;opacity:.8}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.tab:focus-visible,button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.monitor{background:#05080A;border-radius:10px;padding:10px;border:1px solid var(--line);min-width:0}
+.screen{position:relative;width:100%;aspect-ratio:900/400;max-width:100%}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block;image-rendering:auto}
+#ov{touch-action:none}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{font-family:var(--font-body);font-size:.88rem;font-weight:500;border:1px solid #33454E;background:#111A1F;color:#D6E2E7;padding:6px 12px;border-radius:6px;cursor:pointer}
+.btn[aria-pressed="true"]{background:#49BFCD;border-color:#49BFCD;color:#06262B}
+.btn.freeze[aria-pressed="true"]{background:#F0A24B;border-color:#F0A24B;color:#2A1600}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.hint{color:#8EA3AD;font-size:.82rem;flex:1 1 220px;min-width:0}
+.rack{display:grid;gap:12px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h2{font-family:var(--font-display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-bottom:10px}
+.ctl label{font-size:.88rem;font-weight:500}
+.ctl output{font-family:var(--font-mono);font-size:.85rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.seg{grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap}
+.seg button{flex:1;font-family:var(--font-mono);font-size:.8rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 6px;border-radius:5px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.rows{display:grid;gap:0}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+.row:last-child{border-bottom:0}
+.row b{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .k{color:var(--muted)}
+.flag{font-size:.82rem;margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--sunk);border-left:3px solid var(--amber)}
+.flag:empty{display:none}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.lower{grid-template-columns:minmax(0,1fr)}}
+.note p{margin:0 0 8px;max-width:68ch}
+.note p:last-child{margin:0}
+.formula{font-family:var(--font-mono);font-size:.85rem;background:var(--sunk);padding:2px 6px;border-radius:4px}
+.meas-empty{color:var(--muted);font-size:.88rem;margin:0}
+.presets{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
+.presets button{font-size:.78rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 8px;border-radius:5px;cursor:pointer}
+.presets button:hover{border-color:var(--accent)}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+body{margin:0}[hidden]{display:none!important}img{max-width:100%}
+.presets button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.preset-label{font-size:.78rem;color:var(--muted);margin:0 0 4px;text-transform:uppercase;letter-spacing:.06em}
+.row.bad b{color:var(--warn)}
+.row.good b{color:var(--ok)}
+.step{display:grid;grid-template-columns:22px 1fr;gap:8px;padding:6px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+.step:last-child{border-bottom:0}
+.step .ic{font-family:var(--font-mono);font-weight:600;text-align:center}
+.step.y .ic{color:var(--warn)} .step.n .ic{color:var(--ok)} .step.s .ic{color:var(--muted)}
+.verdict{margin-top:10px;padding:10px 12px;border-radius:8px;background:var(--sunk);border-left:4px solid var(--accent);font-weight:600}
+.verdict small{display:block;font-weight:400;color:var(--muted);margin-top:2px}
+.tabs:has(.tab:only-child){display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>Diastology Lab</h1>
+      <p class="sub">Mitral inflow, tissue Doppler e′, TR and pulmonary vein flow, run through the 2025 ASE algorithm for LA pressure and diastolic grade.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Doppler study"><button class="tab" role="tab" data-mode="mv">Mitral inflow<small>PW</small></button><button class="tab" role="tab" data-mode="sep">Septal e′<small>TDI</small></button><button class="tab" role="tab" data-mode="lat">Lateral e′<small>TDI</small></button><button class="tab" role="tab" data-mode="tr">TR jet<small>CW</small></button><button class="tab" role="tab" data-mode="pv">Pulm vein<small>PW</small></button></div>
+  </header>
+
+  <div class="main">
+    <div class="monitor">
+      <div class="screen">
+        <canvas id="spec" width="900" height="400" aria-label="Spectral Doppler display"></canvas>
+        <canvas id="ov" width="900" height="400" aria-hidden="true"></canvas>
+      </div>
+      <div class="toolbar">
+        <button class="btn freeze" id="freeze" aria-pressed="false">Freeze</button>
+        <button class="btn" id="tool-caliper" aria-pressed="true" disabled>Caliper</button>
+        <button class="btn" id="tool-trace" aria-pressed="false" disabled>Trace</button>
+        <button class="btn" id="clear" disabled>Clear</button>
+        <button class="btn" id="env" aria-pressed="false">Show true envelope</button>
+        <span class="hint">Space bar freezes. Caliper: tap up to two points. Trace: drag along one envelope.</span>
+      </div>
+    </div>
+
+    <div class="rack">
+      <section class="panel">
+        <h2>Settings</h2>
+<div class="mode-ctl" data-modes="mv sep lat tr pv"><p class="preset-label">Scenario</p><div class="presets"><button data-preset="normal">Normal</button><button data-preset="athlete">Young athlete</button><button data-preset="g1">Grade I</button><button data-preset="extra">Needs extra variables</button><button data-preset="g2">Grade II</button><button data-preset="g3">Grade III</button></div><div class="ctl"><label for="dde">E velocity</label><output id="dde-o"></output><input type="range" id="dde" min="30" max="150" step="1"></div><div class="ctl"><label for="dda">A velocity</label><output id="dda-o"></output><input type="range" id="dda" min="0" max="120" step="1"></div><div class="ctl"><label for="dddt">Deceleration time</label><output id="dddt-o"></output><input type="range" id="dddt" min="100" max="320" step="5"></div><div class="ctl"><label for="ddsep">Septal e′</label><output id="ddsep-o"></output><input type="range" id="ddsep" min="2" max="16" step="0.5"></div><div class="ctl"><label for="ddlat">Lateral e′</label><output id="ddlat-o"></output><input type="range" id="ddlat" min="3" max="20" step="0.5"></div><div class="ctl"><label for="ddtr">Peak TR velocity</label><output id="ddtr-o"></output><input type="range" id="ddtr" min="1.6" max="4.5" step="0.05"></div><div class="ctl"><label>RA pressure</label><output id="rap-o"></output><div class="seg" id="rap"><button data-v="3">3</button><button data-v="8">8</button><button data-v="15">15</button><button data-v="na">N/A</button></div></div><div class="ctl"><label for="ddlavi">LA volume index</label><output id="ddlavi-o"></output><input type="range" id="ddlavi" min="16" max="70" step="1"></div><div class="ctl"><label for="ddlars">LA reservoir strain</label><output id="ddlars-o"></output><input type="range" id="ddlars" min="5" max="50" step="1"></div><div class="ctl"><label for="ddsd">Pulmonary vein S/D</label><output id="ddsd-o"></output><input type="range" id="ddsd" min="0.3" max="2" step="0.05"></div><div class="ctl"><label>e′ cutoffs</label><output id="age-o"></output><div class="seg" id="age"><button data-v="fixed">Fixed</button><button data-v="y">20 to 39</button><button data-v="m">40 to 65</button><button data-v="o">65+</button></div></div></div>
+        <div class="ctl"><label for="hr">Heart rate</label><output id="hr-o"></output><input type="range" id="hr" min="40" max="150" step="1"></div>
+        <div class="ctl"><label for="ang">Insonation angle</label><output id="ang-o"></output><input type="range" id="ang" min="0" max="45" step="1"></div>
+        <div class="ctl"><label for="scl">Velocity scale</label><output id="scl-o"></output><input type="range" id="scl" min="0.6" max="1.6" step="0.05"></div>
+        <div class="ctl"><label for="gain">Gain</label><output id="gain-o"></output><input type="range" id="gain" min="0.2" max="1.4" step="0.05"></div>
+        <div class="ctl"><label>Sweep speed</label><output id="sweep-o"></output>
+          <div class="seg" id="sweep"><button data-v="50">50</button><button data-v="75">75</button><button data-v="100">100</button></div></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="lower">
+    <section class="panel">
+      <h2>Machine calculations</h2>
+      <div class="rows" id="calc"></div>
+      <div class="flag" id="calc-flag"></div>
+    </section>
+    <section class="panel">
+      <h2>Your measurement</h2>
+      <div id="meas"><p class="meas-empty">Freeze the screen to measure.</p></div>
+    </section>
+<section class="panel" style="grid-column:1/-1"><h2>ASE 2025 algorithm, step by step</h2><div id="extra"></div></section>
+    <section class="panel note" style="grid-column:1/-1">
+      <h2>How to acquire and measure</h2>
+      <div id="note"></div>
+    </section>
+  </div>
+</div>
+<script>
+window.LAB=(()=>{
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const lvShape=x=>{if(x<=0||x>=1)return 0;const pk=.33;return x<pk?Math.pow(Math.sin(Math.PI/2*x/pk),1.1):Math.pow(Math.cos(Math.PI/2*(x-pk)/(1-pk)),1.4)};
+const trShape=x=>{if(x<=0||x>=1)return 0;return Math.pow(Math.sin(Math.PI*Math.pow(x,.85)),.4)};
+const integ=(fn,n=1500)=>{let s=0;for(let i=0;i<n;i++)s+=fn((i+.5)/n)/n;return s};
+const LV_INT=integ(lvShape);
+const ET=hr=>clamp((413-1.7*hr)/1000,.16,.36);
+const PRE=0.06;
+function eWave(dt,E,DTs){const AT=.08;if(dt<0)return 0;if(dt<AT)return E*Math.sin(Math.PI/2*dt/AT);const d=(dt-AT)/DTs;return d<1?E*(1-d):0}
+function inflow(p,T,et,E,A,DTms){
+  const tE=PRE+et+.08;let e=eWave(p-tE,E,DTms/1000);
+  const tA=Math.max(T-.15,tE+.03),aDur=Math.max(.05,T-.02-tA);
+  let a=0;if(p>=tA&&p<=tA+aDur)a=A*Math.sin(Math.PI*(p-tA)/aDur);
+  return {v:a>0?Math.max(e,a+.5*e):e,tE,tAend:tA+aDur,tA,aDur};
+}
+const g=(x,c,w,a)=>a*Math.exp(-(((x-c)/w)**2));
+function ecg(p,T){
+  const qt=.4*Math.sqrt(T);let v=g(p,T-.16,.025,.15)+g(p,qt-.09,.045,.3);
+  for(const q of[p,p-T])v+=g(q,-.025,.008,-.12)+g(q,0,.01,1.1)+g(q,.025,.009,-.25);
+  return v;
+}
+const f2=(x,n=2)=>Number.isFinite(x)?x.toFixed(n):'n/a';
+const row=(k,v,cls)=>`<div class="row${cls?' '+cls:''}"><span class="k">${k}</span><b>${v}</b></div>`;
+const memo=fn=>{const c=new Map();return k=>{if(!c.has(k))c.set(k,fn(k));return c.get(k)}};
+return {clamp,lvShape,trShape,integ,LV_INT,ET,PRE,eWave,inflow,g,ecg,f2,row,memo};
+})();
+
+</script>
+<script>
+window.PAGE=(()=>{
+const L=window.LAB,{clamp,lvShape,trShape,ET,PRE,inflow,f2,row}=L;
+const CUT={fixed:{sep:6,lat:7,avg:6.5,le:true,label:'Fixed (≤6 / ≤7 / ≤6.5)'},y:{sep:7,lat:10,avg:9,label:'Age 20 to 39'},m:{sep:6,lat:8,avg:7,label:'Age 40 to 65'},o:{sep:6,lat:7,avg:6.5,label:'Age over 65'}};
+const PRESETS={
+  normal:{E:80,A:55,DT:190,sep:9,lat:12,trv:2.3,lavi:26,lars:36,sd:1.4},
+  athlete:{E:95,A:45,DT:200,sep:13,lat:17,trv:2.2,lavi:33,lars:40,sd:1.1},
+  g1:{E:50,A:80,DT:250,sep:5,lat:6.5,trv:2.4,lavi:28,lars:28,sd:1.5},
+  extra:{E:75,A:65,DT:190,sep:5.5,lat:7.5,trv:2.6,lavi:37,lars:17,sd:.9},
+  g2:{E:95,A:70,DT:170,sep:5,lat:6.5,trv:3.0,lavi:41,lars:15,sd:.6},
+  g3:{E:115,A:40,DT:130,sep:4,lat:5.5,trv:3.3,lavi:50,lars:10,sd:.4}
+};
+const et=S=>ET(S.hr);
+function tdi(p,T,S,ep){
+  const e=et(S),f=inflow(p,T,e,S.dd.E,S.dd.A,S.dd.DT);
+  let v=0;const s=ep*.75+1.5;
+  v+=s*lvShape((p-PRE-.02)/(e+.02));
+  const t0=f.tE-.015,d=.13;if(p>=t0&&p<=t0+d)v-=ep*Math.sin(Math.PI*(p-t0)/d);
+  const ap=clamp(ep*S.dd.A/Math.max(S.dd.E,1)*1.15,3,14);
+  if(p>=f.tA&&p<=f.tA+f.aDur)v-=ap*Math.sin(Math.PI*(p-f.tA)/f.aDur);
+  return v;
+}
+function pv(p,T,S){
+  const e=et(S),f=inflow(p,T,e,S.dd.E,S.dd.A,S.dd.DT),sum=105,D=sum/(1+S.dd.sd),Sv=S.dd.sd*D,Ar=S.dd.sd<1?38:22;
+  let v=0;const s0=PRE+.03,sd=e+.08;if(p>=s0&&p<=s0+sd)v+=Sv*Math.sin(Math.PI*(p-s0)/sd);
+  const d0=f.tE+.02,dd=clamp(S.dd.DT/1000+.06,.14,.34);if(p>=d0&&p<=d0+dd)v=Math.max(v,D*Math.sin(Math.PI*Math.pow((p-d0)/dd,.7)));
+  if(p>=f.tA&&p<=f.tA+f.aDur+.02)v-=Ar*Math.sin(Math.PI*(p-f.tA)/(f.aDur+.02));
+  return v;
+}
+function assess(S){
+  const d=S.dd,c=CUT[d.age],avg=(d.sep+d.lat)/2,cmp=(x,k)=>c.le?x<=k:x<k;
+  const eRed=cmp(d.sep,c.sep)||cmp(d.lat,c.lat)||cmp(avg,c.avg);
+  const ee=d.E/avg,eeAbn=ee>=14;
+  const rapKnown=d.rap!=='na',pasp=4*d.trv*d.trv+(rapKnown?+d.rap:0);
+  const pAbn=rapKnown?pasp>=35:d.trv>=2.8;
+  const ea=d.A>0?d.E/d.A:Infinity,n=[eRed,eeAbn,pAbn].filter(Boolean).length;
+  const add={lars:d.lars<=18,sd:d.sd<=.67,lavi:d.lavi>34};const addAny=add.lars||add.sd||add.lavi;
+  let lap,grade,path;
+  if(n===3){lap='Elevated';grade=ea>=2?'Grade III':'Grade II';path='core3'}
+  else if(n===0){lap='Normal';grade='Normal diastolic function';path='none'}
+  else if(eRed&&!eeAbn&&!pAbn&&ea<=.8){lap='Normal';grade='Grade I';path='g1'}
+  else{path='add';if(addAny){lap='Elevated';grade=ea>=2?'Grade III':'Grade II'}else{lap='Normal';grade=eRed?'Grade I':'Normal diastolic function'}}
+  return {avg,eRed,ee,eeAbn,rapKnown,pasp,pAbn,ea,n,add,addAny,lap,grade,path,c};
+}
+function algoHTML(S,a){
+  const st=(state,txt)=>`<div class="step ${state}"><span class="ic">${state==='y'?'✗':state==='n'?'✓':'·'}</span><span>${txt}</span></div>`;
+  const yn=b=>b?'y':'n',d=S.dd;
+  let h='<p class="preset-label">Step 1 to 2: core variables (✗ = abnormal)</p>';
+  h+=st(yn(a.eRed),`Reduced e′ (${a.c.label}): septal ${f2(d.sep,1)}, lateral ${f2(d.lat,1)}, average ${f2(a.avg,1)} cm/s`);
+  h+=st(yn(a.eeAbn),`Average E/e′ ≥ 14: ${f2(a.ee,1)}`);
+  h+=st(yn(a.pAbn),a.rapKnown?`PASP ≥ 35 mmHg: ${f2(a.pasp,0)} mmHg (TR ${f2(d.trv)} m/s, RAP ${d.rap})`:`TR velocity ≥ 2.8 m/s (RAP not estimable): ${f2(d.trv)} m/s`);
+  h+=`<p class="preset-label" style="margin-top:10px">Step 3: ${a.n} of 3 abnormal</p>`;
+  if(a.path==='core3')h+=st('y',`All three abnormal: LAP elevated. Grade by E/A (${f2(a.ea,1)}): < 2 is grade II, ≥ 2 is grade III.`);
+  else if(a.path==='none')h+=st('n','None abnormal: normal LAP and normal relaxation.');
+  else if(a.path==='g1')h+=st('n',`Only e′ reduced with E/A ${f2(a.ea,1)} ≤ 0.8: impaired relaxation with normal LAP.`);
+  else{
+    h+=st('s','Unresolved: go to additional variables. Any one abnormal supports elevated LAP.');
+    h+=st(yn(a.add.lars),`LA reservoir strain ≤ 18%: ${f2(d.lars,0)}%`);
+    h+=st(yn(a.add.sd),`Pulmonary vein S/D ≤ 0.67: ${f2(d.sd)}`);
+    h+=st(yn(a.add.lavi),`LAVI > 34 mL/m²: ${f2(d.lavi,0)}`);
+  }
+  h+=`<div class="verdict">LAP ${a.lap}: ${a.grade}<small>E/A ${Number.isFinite(a.ea)?f2(a.ea,1):'no A wave'} · average E/e′ ${f2(a.ee,1)} · sinus rhythm algorithm; not for AF, significant MR or MS, moderate or greater MAC, or prosthetic mitral valves.</small></div>`;
+  return h;
+}
+return {
+  modes:[
+    {id:'mv',kind:'PW',name:'MV',view:'A4C  SV 2mm  leaflet tips',top:170,bottom:-50,dir:1,tick:20,lab:50},
+    {id:'sep',kind:'TDI',name:'Septal e′',view:'A4C  septal annulus',top:20,bottom:-25,dir:-1,tick:5,lab:5,gainK:.9,resp:.01},
+    {id:'lat',kind:'TDI',name:'Lateral e′',view:'A4C  lateral annulus',top:20,bottom:-25,dir:-1,tick:5,lab:5,gainK:.9,resp:.01},
+    {id:'tr',kind:'CW',name:'TR',view:'A4C  TV',top:100,bottom:-600,dir:-1,tick:100,lab:100,resp:.05},
+    {id:'pv',kind:'PW',name:'PV',view:'A4C  R upper pulmonary vein',top:100,bottom:-60,dir:1,tick:20,lab:50}
+  ],
+  state:{dd:Object.assign({rap:'8',age:'fixed'},PRESETS.normal)},
+  model(p,T,S,m){
+    const e=et(S);
+    if(m.id==='mv'){const f=inflow(p,T,e,S.dd.E,S.dd.A,S.dd.DT);return {main:f.v,clicks:[f.tE,f.tAend+.01]}}
+    if(m.id==='sep')return {main:tdi(p,T,S,S.dd.sep)};
+    if(m.id==='lat')return {main:tdi(p,T,S,S.dd.lat)};
+    if(m.id==='tr')return {main:-S.dd.trv*100*trShape((p-.02)/(e+.11)),second:inflow(p,T,e,S.dd.E*.6,S.dd.A*.6,S.dd.DT).v};
+    return {main:pv(p,T,S)};
+  },
+  bind(a){const S=a.S,d=S.dd;
+    [['E','dde',v=>`${v} cm/s`],['A','dda',v=>`${v} cm/s`],['DT','dddt',v=>`${v} ms`],['sep','ddsep',v=>`${v.toFixed(1)} cm/s`],['lat','ddlat',v=>`${v.toFixed(1)} cm/s`],
+     ['trv','ddtr',v=>`${v.toFixed(2)} m/s`],['lavi','ddlavi',v=>`${v} mL/m²`],['lars','ddlars',v=>`${v}%`],['sd','ddsd',v=>v.toFixed(2)]]
+     .forEach(([k,id,fmt])=>a.bindRange(id,()=>d[k],v=>d[k]=v,fmt));
+    a.bindSeg('rap',()=>d.rap,v=>d.rap=v,v=>v==='na'?'Not estimable':`${v} mmHg`);
+    a.bindSeg('age',()=>d.age,v=>d.age=v,v=>CUT[v].label);
+  },
+  calc(S,mode){
+    const a=assess(S),d=S.dd,cosA=Math.cos(S.ang*Math.PI/180);let h='',flag='';
+    if(mode==='mv'){h=row('E',`${f2(d.E*cosA/100)} m/s`)+row('A',`${f2(d.A*cosA/100)} m/s`)+row('E/A',Number.isFinite(a.ea)?f2(a.ea,1):'no A wave')+row('Deceleration time',`${d.DT} ms`);
+      flag='E/A decides the grade once LAP is known: ≤ 0.8 fits grade I, ≥ 2 fits grade III. A young athlete can have E/A > 2 with brisk e′ and normal LAP, which is why e′ comes first. ';if(S.hr>100)flag+='E and A fuse at this rate; report the fused peak. '}
+    else if(mode==='sep'||mode==='lat'){const v=mode==='sep'?d.sep:d.lat,k=mode==='sep'?a.c.sep:a.c.lat;
+      h=row(mode==='sep'?'Septal e′':'Lateral e′',`${f2(v*cosA,1)} cm/s`)+row('Cutoff',`${a.c.le?'≤':'<'} ${k} cm/s`)+row('Average e′',`${f2(a.avg,1)} cm/s`)+row(mode==='sep'?'Septal E/e′':'Lateral E/e′',f2(d.E/v,1),(mode==='sep'?d.E/v>=15:d.E/v>=13)?'bad':'')+row('Average E/e′',f2(a.ee,1),a.eeAbn?'bad':'');
+      flag='Measure the peak of the early diastolic wave below the baseline. Septal e′ is normally lower than lateral e′. ';if(S.ang>0)flag+=`Angle error makes e′ read low by ${f2((1-cosA)*100,0)}%, which falsely raises E/e′.`}
+    else if(mode==='tr'){h=row('Peak TR velocity',`${f2(d.trv*cosA)} m/s`)+row('Gradient 4V²',`${f2(4*(d.trv*cosA)**2,0)} mmHg`)+row('RA pressure',a.rapKnown?`${d.rap} mmHg`:'not estimable')+row('PASP',a.rapKnown?`${f2(a.pasp,0)} mmHg`:'n/a');
+      flag=a.rapKnown?'With RAP estimable, the 2025 algorithm uses PASP ≥ 35 mmHg. ':'With RAP not estimable, it uses TR velocity ≥ 2.8 m/s. ';flag+='Exclude noncardiac pulmonary hypertension before using TR as a surrogate for LAP.'}
+    else{const D=105/(1+d.sd);h=row('S wave',`${f2(d.sd*D/100)} m/s`)+row('D wave',`${f2(D/100)} m/s`)+row('S/D',f2(d.sd),d.sd<=.67?'bad':'')+row('LAVI',`${d.lavi} mL/m²`,d.lavi>34?'bad':'')+row('LA reservoir strain',`${d.lars}%`,d.lars<=18?'bad':'');
+      flag='Pulmonary vein S/D ≤ 0.67 supports elevated LAP when the core variables leave it unresolved. Young healthy hearts can have D > S with normal LAP.'}
+    return {html:h,flag,extra:algoHTML(S,a)};
+  },
+  caliperHint:S=>S.mode==='mv'?'Tap the E peak then the A peak for E/A, or the E peak then the baseline intercept for DT.':'Tap the peak of the wave to read its velocity.',
+  caliperExtra1({va},S){if(S.mode==='sep'||S.mode==='lat'){const e=Math.abs(va);return e>.5?row('E/e′ using this point',f2(S.dd.E/e,1)):''}if(S.mode==='tr')return row('PASP from point 1',S.dd.rap==='na'?'RAP not estimable':`${f2(4*(va/100)**2+(+S.dd.rap),0)} mmHg`);return ''},
+  applyPreset(k,a){const P=PRESETS[k];a.setRange('dde',P.E);a.setRange('dda',P.A);a.setRange('dddt',P.DT);a.setRange('ddsep',P.sep);a.setRange('ddlat',P.lat);a.setRange('ddtr',P.trv);a.setRange('ddlavi',P.lavi);a.setRange('ddlars',P.lars);a.setRange('ddsd',P.sd)},
+  notes:{
+    mv:`<p>PW sample volume (1 to 3 mm) at the mitral leaflet tips in the apical 4-chamber view, sweep 50 to 100 mm/s, end-expiration. Measure E and A at their peaks and DT from the E peak to the baseline intercept of the deceleration slope.</p><p>In the 2025 ASE algorithm, E/A no longer decides whether LAP is elevated; it grades severity once LAP is known.</p>`,
+    sep:`<p>Tissue Doppler with the sample volume (5 to 10 mm) on the septal mitral annulus in the apical 4-chamber view. Lower the scale to about ±20 cm/s and the gain so the signal is a narrow bright band. Align the annulus motion with the beam.</p><p>e′ is the first negative wave in diastole, a′ the second. s′ sits above the baseline in systole.</p>`,
+    lat:`<p>Same technique at the lateral mitral annulus. Lateral e′ is normally higher than septal. Use the average of both for <span class="formula">average E/e′</span>; if only one is available, the cutoffs are septal E/e′ ≥ 15 and lateral E/e′ ≥ 13.</p>`,
+    tr:`<p>CW through the tricuspid valve from the RV-focused apical or parasternal RV inflow view. Use the highest clean envelope from multiple windows. <span class="formula">PASP = 4V² + RAP</span>.</p>`,
+    pv:`<p>PW sample volume 1 to 2 cm into the right upper pulmonary vein in the apical 4-chamber view, color to guide. Measure S, D and atrial reversal (Ar). The 2025 additional variables are LA reservoir strain ≤ 18%, pulmonary vein S/D ≤ 0.67, and LAVI > 34 mL/m².</p>`
+  }
+};})();
+
+</script>
+<script>
+(()=>{
+const P=window.PAGE;
+const W=900,H=400,HS=330,ECG0=342;
+const spec=document.getElementById('spec'),sctx=spec.getContext('2d');
+const ov=document.getElementById('ov'),octx=ov.getContext('2d');
+const $=id=>document.getElementById(id);
+const MODES={};P.modes.forEach(m=>MODES[m.id]=m);
+const S=Object.assign({mode:P.modes[0].id,hr:72,ang:0,scl:1,gain:0.8,sweep:100,frozen:false,tool:'caliper',showEnv:false},P.state);
+const L=window.LAB;
+
+// ---------- sweep buffer ----------
+let colTime=new Float64Array(W).fill(NaN),colEnv=new Float32Array(W),colTrue=new Float32Array(W),colBeat=new Int32Array(W);
+let simT=0,sweepX=0,acc=0,beatStart=0,beatLen=60/S.hr,beatId=0,prevEcgY=ECG0+40,last=performance.now();
+const col=sctx.createImageData(1,H);
+const range=()=>{const m=MODES[S.mode];return {top:m.top*S.scl,bot:m.bottom*S.scl}};
+const yOfV=v=>{const r=range();return (r.top-v)/(r.top-r.bot)*HS};
+const vOfY=y=>{const r=range();return r.top-y/HS*(r.top-r.bot)};
+const pxPerSec=()=>W/(240/S.sweep);
+function resetBuffer(){sctx.fillStyle='#000';sctx.fillRect(0,0,W,H);colTime.fill(NaN);sweepX=0;acc=0;measure.pts=[];measure.trace=[];}
+const clamp=L.clamp;
+function lamI(v,e,w){if(Math.abs(e)<1||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);if(r>1)return .9*Math.exp(-(((r-1)/.035)**2));return .1+.9*Math.exp(-(((1-r)/(w||.17))**2))}
+function tdiI(v,e){if(Math.abs(e)<.3||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);if(r>1)return Math.exp(-(((r-1)/.06)**2));return .05+.95*Math.exp(-(((1-r)/.12)**2))}
+function cwI(v,e){if(Math.abs(e)<1||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);if(r>1)return Math.exp(-(((r-1)/.025)**2));return .3+.7*r*r}
+function drawColumn(){
+  const pps=pxPerSec(),dtc=1/pps;simT+=dtc;
+  if(simT>=beatStart+beatLen){beatStart+=beatLen;beatLen=60/S.hr;beatId++}
+  const p=simT-beatStart,T=beatLen,m=MODES[S.mode];
+  const resp=P.resp?P.resp(simT,S):1+(m.resp||.03)*Math.sin(2*Math.PI*simT/4.2);
+  const md=P.model(p,T,S,m);const cosA=Math.cos(S.ang*Math.PI/180);
+  const trueMain=md.main*resp,disp=trueMain*cosA,sec=(md.second||0)*cosA*resp;
+  colTime[sweepX]=simT;colEnv[sweepX]=disp;colTrue[sweepX]=trueMain;colBeat[sweepX]=beatId;
+  const ej=disp*(1+(Math.random()-.5)*.035),r=range(),N2=r.top-r.bot,kind=m.kind;
+  const clicks=md.clicks||[];const click=clicks.some(c=>Math.abs(p-c)<dtc*1.6);
+  const faint=md.faint,G=S.gain*1.35*(m.gainK||1),d=col.data;
+  for(let y=0;y<HS;y++){
+    const v=vOfY(y+.5);let I;
+    if(kind==='PW'){I=lamI(v,ej)+lamI(v+N2,ej)+lamI(v-N2,ej)}
+    else if(kind==='TDI'){I=tdiI(v,ej)+tdiI(v+N2,ej)+tdiI(v-N2,ej)}
+    else{I=cwI(v,ej);if(faint){I*=Math.random()<.5?0:.4}
+      if(md.secondEdge)I+=.8*lamI(v,sec,.08);else I+=(md.secondK||.4)*cwI(v,sec)}
+    I*=(.35+Math.random());
+    if(click&&Math.abs(v)<.55*Math.max(r.top,-r.bot))I+=.5+.5*Math.random();
+    I=I*G+Math.random()*.06;
+    if(Math.abs(v)<N2*.008)I*=.3;
+    const c=Math.pow(clamp(I,0,1),.85)*255,o=y*4;d[o]=c;d[o+1]=c*.97;d[o+2]=c*.9;d[o+3]=255;
+  }
+  for(let y=HS;y<H;y++){const o=y*4;d[o]=d[o+1]=d[o+2]=0;d[o+3]=255}
+  const ey=Math.round(ECG0+40-L.ecg(p,T)*36),a=Math.min(ey,prevEcgY),b=Math.max(ey,prevEcgY);
+  for(let y=a;y<=b;y++){if(y<HS||y>=H)continue;const o=y*4;d[o]=70;d[o+1]=220;d[o+2]=120}
+  prevEcgY=ey;
+  sctx.putImageData(col,sweepX,0);
+  sctx.fillStyle='#000';sctx.fillRect(sweepX+1,0,7,H);if(sweepX+8>=W)sctx.fillRect(0,0,sweepX+8-W,H);
+  for(let k=1;k<=7;k++)colTime[(sweepX+k)%W]=NaN;
+  sweepX=(sweepX+1)%W;
+}
+
+// ---------- overlay ----------
+const measure={pts:[],trace:[],drawing:false};
+function drawOverlay(){
+  const c=octx,m=MODES[S.mode],r=range();c.clearRect(0,0,W,H);
+  c.font='500 13px "IBM Plex Mono",monospace';
+  const y0=yOfV(0);c.strokeStyle='rgba(120,200,215,.7)';c.lineWidth=1;c.beginPath();c.moveTo(0,y0+.5);c.lineTo(W,y0+.5);c.stroke();
+  c.fillStyle='rgba(0,0,0,.55)';c.fillRect(W-58,0,58,HS);
+  c.strokeStyle='#9FB4BC';c.fillStyle='#CFE0E6';c.textAlign='right';c.textBaseline='middle';
+  const step=m.tick*(S.scl>1.25&&m.kind==='CW'?2:1),lab=m.lab*(S.scl>1.25&&m.kind==='CW'?2:1),tdi=m.kind==='TDI';
+  for(let v=Math.ceil(r.bot/step)*step;v<=r.top+1e-6;v+=step){
+    const y=yOfV(v);if(y<6||y>HS-6)continue;const major=Math.abs(Math.round(v*1000)%Math.round(lab*1000))<1;
+    c.beginPath();c.moveTo(W-58,y+.5);c.lineTo(W-58+(major?10:5),y+.5);c.stroke();
+    if(major)c.fillText(tdi?Math.round(v).toString():(v/100).toFixed(m.kind==='CW'?0:1),W-6,y);
+  }
+  c.fillText(tdi?'cm/s':'m/s',W-6,HS-10);
+  c.textAlign='left';c.textBaseline='top';c.fillStyle='#7FD3DE';
+  c.fillText(`${tdi?'TDI':m.kind}  ${m.name}  ${m.view}`,10,8);
+  c.fillStyle='#9FB4BC';
+  const nyq=m.kind==='CW'?'n/a':(tdi?((r.top-r.bot)/2).toFixed(0)+' cm/s':((r.top-r.bot)/200).toFixed(2)+' m/s');
+  c.fillText(`${S.sweep} mm/s   angle ${S.ang}°   Nyq ${nyq}`,10,26);
+  c.fillStyle='#46DC78';c.fillText('II',10,HS+8);c.textAlign='right';c.fillText(`HR ${S.hr}`,W-66,HS+8);
+  if(S.frozen){c.textAlign='center';c.fillStyle='#F0A24B';c.font='600 15px "IBM Plex Mono",monospace';c.fillText('FROZEN',W/2,8);c.font='500 13px "IBM Plex Mono",monospace'}
+  if(S.showEnv){
+    c.strokeStyle='rgba(73,191,205,.95)';c.lineWidth=1.5;c.setLineDash([4,3]);c.beginPath();let pen=false;
+    for(let x=0;x<W;x++){if(isNaN(colTime[x])||(x>0&&Math.abs(colTime[x]-colTime[x-1])>.05)){pen=false;continue}
+      const y=yOfV(colEnv[x]);if(!pen){c.moveTo(x,y);pen=true}else c.lineTo(x,y)}
+    c.stroke();c.setLineDash([]);
+  }
+  c.strokeStyle='#F0A24B';c.fillStyle='#F0A24B';c.lineWidth=1.5;c.textAlign='left';c.textBaseline='bottom';
+  measure.pts.forEach((pt,i)=>{
+    c.beginPath();c.moveTo(pt.x-8,pt.y);c.lineTo(pt.x+8,pt.y);c.moveTo(pt.x,pt.y-8);c.lineTo(pt.x,pt.y+8);c.stroke();
+    const v=vOfY(pt.y);c.fillText(tdi?`${i+1}: ${v.toFixed(1)} cm/s`:`${i+1}: ${(v/100).toFixed(2)} m/s`,Math.min(pt.x+10,W-170),pt.y-4);
+  });
+  if(measure.pts.length===2){c.setLineDash([3,3]);c.beginPath();c.moveTo(measure.pts[0].x,measure.pts[0].y);c.lineTo(measure.pts[1].x,measure.pts[1].y);c.stroke();c.setLineDash([])}
+  if(measure.trace.length>1){c.beginPath();measure.trace.forEach((pt,i)=>i?c.lineTo(pt.x,pt.y):c.moveTo(pt.x,pt.y));c.stroke()}
+}
+
+// ---------- measurement ----------
+function toCanvas(e){const b=ov.getBoundingClientRect();return {x:clamp((e.clientX-b.left)/b.width*W,0,W-1),y:clamp((e.clientY-b.top)/b.height*H,0,HS)}}
+ov.addEventListener('pointerdown',e=>{
+  if(!S.frozen)return;const pt=toCanvas(e);
+  if(S.tool==='caliper'){if(measure.pts.length>=2)measure.pts=[];measure.pts.push(pt);renderMeasure()}
+  else{measure.trace=[pt];measure.drawing=true;ov.setPointerCapture(e.pointerId)}
+});
+ov.addEventListener('pointermove',e=>{if(measure.drawing)measure.trace.push(toCanvas(e))});
+ov.addEventListener('pointerup',()=>{if(measure.drawing){measure.drawing=false;renderMeasure()}});
+const f2=L.f2,row=L.row;
+function renderMeasure(){
+  const el=$('meas'),m=MODES[S.mode],tdi=m.kind==='TDI';
+  if(!S.frozen){el.innerHTML='<p class="meas-empty">Freeze the screen to measure.</p>';return}
+  if(S.tool==='caliper'){
+    if(!measure.pts.length){el.innerHTML=`<p class="meas-empty">${P.caliperHint?P.caliperHint(S):'Tap a point on the spectrum. Two points give a time interval and ratio.'}</p>`;return}
+    let h='';measure.pts.forEach((pt,i)=>{const v=vOfY(pt.y);h+=row(`Point ${i+1}`,tdi?`${f2(Math.abs(v),1)} cm/s`:`${f2(Math.abs(v/100))} m/s · ${f2(4*(v/100)**2,0)} mmHg`)});
+    if(measure.pts.length===2){
+      const [a,b]=measure.pts,ta=colTime[Math.round(a.x)],tb=colTime[Math.round(b.x)],va=vOfY(a.y),vb=vOfY(b.y);
+      const dt=(tb-ta)*1000;h+=row('Δ time',Number.isFinite(dt)?`${f2(Math.abs(dt),0)} ms`:'crosses sweep gap');
+      h+=row('Ratio 1 : 2',Math.abs(vb)>(tdi?.2:1)?f2(Math.abs(va/vb)):'n/a');
+      if(P.caliperExtra)h+=P.caliperExtra({va,vb,dt},S);
+    }else if(P.caliperExtra1){h+=P.caliperExtra1({va:vOfY(measure.pts[0].y)},S)}
+    el.innerHTML=`<div class="rows">${h}</div>`;return;
+  }
+  let pts=measure.trace.map(p=>({t:colTime[Math.round(p.x)],v:vOfY(p.y),x:p.x})).filter(p=>Number.isFinite(p.t)&&p.v*m.dir>0);
+  pts.sort((a,b)=>a.t-b.t);
+  if(pts.length<4){el.innerHTML='<p class="meas-empty">Drag along the outer edge of one beat, starting and ending at the baseline.</p>';return}
+  let segs=[[pts[0]]];for(let i=1;i<pts.length;i++){if(pts[i].t-pts[i-1].t>.05)segs.push([]);segs[segs.length-1].push(pts[i])}
+  pts=segs.sort((a,b)=>b.length-a.length)[0];
+  let vti=0,pk=0,mg=0,tpk=0;for(let i=1;i<pts.length;i++){const dt=pts[i].t-pts[i-1].t,a=Math.abs(pts[i].v),b=Math.abs(pts[i-1].v);vti+=(a+b)/2*dt;mg+=2*((a/100)**2+(b/100)**2)*dt}
+  pts.forEach(p=>{if(Math.abs(p.v)>pk){pk=Math.abs(p.v);tpk=p.t}});const dur=pts[pts.length-1].t-pts[0].t;
+  const mid=Math.round(pts[Math.floor(pts.length/2)].x),bid=colBeat[mid];
+  let tv=0,tt=0;const dc=1/pxPerSec();
+  for(let x=0;x<W;x++){if(isNaN(colTime[x])||colBeat[x]!==bid||colEnv[x]*m.dir<=0)continue;tv+=Math.abs(colEnv[x])*dc;tt+=Math.abs(colTrue[x])*dc}
+  let h=row('Your VTI',`${f2(vti,1)} cm`)+row('Your peak',`${f2(pk/100)} m/s`)+row('Duration',`${f2(dur*1000,0)} ms`)+row('Time to peak',`${f2((tpk-pts[0].t)*1000,0)} ms`)+row('Mean gradient',`${f2(mg/Math.max(dur,1e-3),1)} mmHg`);
+  h+=row('Screen envelope VTI, this beat',`${f2(tv,1)} cm`);
+  if(S.ang>0)h+=row('Actual VTI (angle corrected)',`${f2(tt,1)} cm`);
+  const err=tv>0?(vti-tv)/tv*100:NaN;h+=row('Tracing error vs screen',`${err>0?'+':''}${f2(err,0)}%`);
+  if(P.traceExtra)h+=P.traceExtra({vti,pk,mg:mg/Math.max(dur,1e-3),dur,ttp:tpk-pts[0].t},S);
+  el.innerHTML=`<div class="rows">${h}</div>`;
+}
+
+// ---------- calculations ----------
+function renderCalc(){
+  const out=P.calc(S,S.mode);
+  $('calc').innerHTML=out.html;$('calc-flag').textContent=(out.flag||'').trim();
+  if(out.extra!==undefined&&$('extra'))$('extra').innerHTML=out.extra;
+}
+
+// ---------- controls ----------
+function bindRange(id,get,set,fmt){const el=$(id),o=$(id+'-o');if(!el)return;el.value=get();o.textContent=fmt(get());el.addEventListener('input',()=>{set(parseFloat(el.value));o.textContent=fmt(get());renderCalc()})}
+function syncRange(id){const el=$(id);if(el)el.dispatchEvent(new Event('input'))}
+const segSyncs=[];
+function bindSeg(id,get,set,fmt,after){const el=$(id),o=$(id+'-o');if(!el)return;
+  const sync=()=>{el.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==String(get()))));if(o)o.textContent=fmt(get())};
+  el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;set(b.dataset.v);sync();renderCalc();after&&after()});sync();segSyncs.push(sync)}
+const api={S,bindRange,bindSeg,syncRange,renderCalc,resetBuffer,syncSegs:()=>segSyncs.forEach(f=>f()),setRange:(id,v)=>{const el=$(id);if(el){el.value=v;el.dispatchEvent(new Event('input'))}}};
+P.bind(api);
+bindRange('hr',()=>S.hr,v=>S.hr=v,v=>`${v} bpm`);
+bindRange('ang',()=>S.ang,v=>S.ang=v,v=>`${v}°`);
+bindRange('gain',()=>S.gain,v=>S.gain=v,v=>`${Math.round(v*100)}%`);
+bindRange('scl',()=>S.scl,v=>S.scl=v,v=>`${v.toFixed(2)}×`);$('scl').addEventListener('change',resetBuffer);
+bindSeg('sweep',()=>S.sweep,v=>S.sweep=+v,v=>`${v} mm/s`,resetBuffer);
+document.querySelectorAll('[data-preset]').forEach(b=>b.addEventListener('click',()=>{P.applyPreset(b.dataset.preset,api);
+  b.parentElement.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed',String(x===b)));renderCalc();}));
+
+function setMode(m){S.mode=m;document.querySelectorAll('.tab').forEach(t=>t.setAttribute('aria-selected',String(t.dataset.mode===m)));
+  document.querySelectorAll('.mode-ctl').forEach(c=>{const ms=(c.dataset.modes||'').split(' ');c.hidden=!ms.includes(m)});
+  $('note').innerHTML=P.notes[m];resetBuffer();if(S.frozen)setFrozen(false);renderCalc();renderMeasure();
+  try{history.replaceState(null,'','#'+m)}catch(e){}}
+document.querySelectorAll('.tab').forEach(t=>t.addEventListener('click',()=>setMode(t.dataset.mode)));
+function setFrozen(f){S.frozen=f;$('freeze').setAttribute('aria-pressed',String(f));$('freeze').textContent=f?'Unfreeze':'Freeze';
+  ['tool-caliper','tool-trace','clear'].forEach(id=>$(id).disabled=!f);if(!f){measure.pts=[];measure.trace=[]}renderMeasure()}
+$('freeze').addEventListener('click',()=>setFrozen(!S.frozen));
+function setTool(t){S.tool=t;$('tool-caliper').setAttribute('aria-pressed',String(t==='caliper'));$('tool-trace').setAttribute('aria-pressed',String(t==='trace'));measure.pts=[];measure.trace=[];renderMeasure()}
+$('tool-caliper').addEventListener('click',()=>setTool('caliper'));$('tool-trace').addEventListener('click',()=>setTool('trace'));
+$('clear').addEventListener('click',()=>{measure.pts=[];measure.trace=[];renderMeasure()});
+$('env').addEventListener('click',()=>{S.showEnv=!S.showEnv;$('env').setAttribute('aria-pressed',String(S.showEnv))});
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();setFrozen(!S.frozen)}});
+
+function frame(ts){const dt=Math.min(.05,(ts-last)/1000);last=ts;
+  if(!S.frozen){acc+=dt*pxPerSec();let n=0;while(acc>=1&&n<60){acc-=1;drawColumn();n++}}
+  drawOverlay();requestAnimationFrame(frame)}
+const start=(location.hash||'').slice(1);setMode(MODES[start]?start:P.modes[0].id);
+for(let i=0;i<W-40;i++)drawColumn();
+requestAnimationFrame(frame);
+window.__lab={S,model:P.model,calc:P.calc,api};
+})();
+
+</script>
+<script>(function(){function s(){try{parent.postMessage({labHeight:Math.ceil(document.querySelector(".wrap").getBoundingClientRect().height),lab:"diastology"},"*")}catch(e){}}addEventListener("load",s);addEventListener("resize",s);new ResizeObserver(s).observe(document.body)})();</script>
+</body>
+</html>
