@@ -1,0 +1,685 @@
+<title>Hemodynamic Waveform Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: bedside monitor console. Black monitor with numerics column on the left, control rack right, teaching and calculations below. Matches the pulmonarypocus.com Doppler Lab family. */
+:root{
+  --bg:#EEF2F3; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#14212B; --muted:#5A6B76; --line:#CBD5D9;
+  --accent:#0A7484; --accent-ink:#FFFFFF; --amber:#A65A12; --warn:#B3261E; --ok:#2E7D4F;
+  --mon:#04080A; --mon-line:#1E2C33; --mon-ink:#D6E2E7; --mon-muted:#8EA3AD;
+  --c-ecg:#3BE36F; --c-art:#FF5B57; --c-pa:#FFD84A; --c-cvp:#57C7FF; --c-resp:#D9E2E6;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1360px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.92rem;max-width:70ch}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:16px;align-items:start}
+@media (max-width:1020px){.main{grid-template-columns:minmax(0,1fr)}}
+.monitor{background:var(--mon);border-radius:10px;padding:10px;border:1px solid var(--line);min-width:0;color:var(--mon-ink)}
+.mon-top{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 12px;font-family:var(--font-mono);font-size:.78rem;color:var(--mon-muted);padding:0 2px 8px}
+.mon-top b{color:var(--mon-ink);font-weight:500}
+.mon-body{display:grid;grid-template-columns:minmax(0,1fr) 150px;gap:8px}
+@media (max-width:640px){.mon-body{grid-template-columns:minmax(0,1fr)}}
+.screen{position:relative;width:100%;aspect-ratio:1000/540;max-width:100%}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{touch-action:none;cursor:crosshair}
+.nums{display:grid;grid-template-rows:84fr 136fr 136fr 106fr 82fr;gap:4px;min-width:0}
+@media (max-width:640px){.nums{grid-template-rows:none;grid-template-columns:repeat(auto-fit,minmax(104px,1fr))}}
+.num{border-left:2px solid currentColor;padding:2px 8px;display:flex;flex-direction:column;justify-content:center;min-width:0}
+.num .lab{font-family:var(--font-display);font-weight:600;letter-spacing:.08em;font-size:.82rem;text-transform:uppercase;opacity:.9}
+.num b{font-family:var(--font-mono);font-weight:500;font-size:1.5rem;line-height:1.1;font-variant-numeric:tabular-nums;white-space:nowrap}
+.num small{font-family:var(--font-mono);font-size:.74rem;opacity:.85;font-variant-numeric:tabular-nums}
+.num.ecg{color:var(--c-ecg)}.num.art{color:var(--c-art)}.num.pa{color:var(--c-pa)}.num.cvp{color:var(--c-cvp)}.num.resp{color:var(--c-resp)}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{font-family:var(--font-body);font-size:.88rem;font-weight:500;border:1px solid #33454E;background:#111A1F;color:#D6E2E7;padding:6px 12px;border-radius:6px;cursor:pointer}
+.btn[aria-pressed="true"]{background:#49BFCD;border-color:#49BFCD;color:#06262B}
+.btn.freeze[aria-pressed="true"]{background:#F0A24B;border-color:#F0A24B;color:#2A1600}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.hint{color:var(--mon-muted);font-size:.82rem;flex:1 1 220px;min-width:0}
+.rack{display:grid;gap:12px;min-width:0}
+.leftcol{display:grid;gap:16px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h2{font-family:var(--font-display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-bottom:10px}
+.ctl:last-child{margin-bottom:0}
+.ctl label,.ctl .lbl{font-size:.88rem;font-weight:500}
+.ctl output{font-family:var(--font-mono);font-size:.85rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.seg{grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap}
+.seg button{flex:1;font-family:var(--font-mono);font-size:.8rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:5px 6px;border-radius:5px;cursor:pointer;white-space:nowrap}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.tab:focus-visible,button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.scen{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.scen button{font-size:.8rem;text-align:left;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:5px 8px;border-radius:5px;cursor:pointer}
+.scen button:hover{border-color:var(--accent)}
+.scen button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.grid2{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:820px){.lower{grid-template-columns:minmax(0,1fr)}}
+.rows{display:grid}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+.row:last-child{border-bottom:0}
+.row b{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .k{color:var(--muted)}
+.flags{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.flag{font-size:.84rem;padding:7px 10px;border-radius:6px;background:var(--sunk);border-left:3px solid var(--amber)}
+.flag.ok{border-left-color:var(--ok)}
+.tabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:8px;flex-wrap:wrap;margin-bottom:12px}
+.tab{font-family:var(--font-display);font-size:1rem;font-weight:600;letter-spacing:.03em;border:0;background:transparent;color:var(--muted);padding:5px 12px;border-radius:6px;cursor:pointer}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.guide h3{font-family:var(--font-display);font-size:1.25rem;margin:0 0 6px;letter-spacing:.01em}
+.guide p{margin:0 0 8px;max-width:72ch}
+.guide ul{margin:0;padding-left:18px;display:grid;gap:5px;max-width:72ch}
+.guide li b{font-weight:600}
+.tag{display:inline-block;font-family:var(--font-mono);font-size:.74rem;padding:1px 6px;border-radius:4px;background:var(--sunk);color:var(--muted);margin-left:6px;vertical-align:2px}
+.quiz-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0}
+@media (max-width:420px){.quiz-opts{grid-template-columns:1fr}}
+.quiz-opts button{font-size:.88rem;text-align:left;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:8px 10px;border-radius:6px;cursor:pointer}
+.quiz-opts button.right{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 18%,var(--sunk))}
+.quiz-opts button.wrong{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,var(--sunk))}
+.primary{font-family:var(--font-body);font-size:.88rem;font-weight:600;border:0;background:var(--accent);color:var(--accent-ink);padding:8px 14px;border-radius:6px;cursor:pointer}
+.score{font-family:var(--font-mono);font-size:.85rem;color:var(--muted);margin-left:8px}
+.fb{font-size:.9rem;margin:0}
+.muted{color:var(--muted);font-size:.85rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap" id="wrap">
+  <header>
+    <div>
+      <h1>Hemodynamic Waveform Lab</h1>
+      <p class="sub">Live ECG, arterial line, CVP and pulmonary artery catheter tracings. Float the catheter, test the damping, and read the waveforms at end-expiration.</p>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="leftcol">
+    <div class="monitor">
+      <div class="mon-top">
+        <span>Patient: <b id="m-pt">Normal</b></span>
+        <span>PAC tip: <b id="m-pos">PA</b> <span id="m-depth">45 cm</span> &middot; balloon <b id="m-bal">down</b></span>
+        <span>Vent: <b id="m-vent">spontaneous</b></span>
+      </div>
+      <div class="mon-body">
+        <div class="screen">
+          <canvas id="cv" width="1000" height="540" aria-label="Bedside monitor with ECG, arterial, pulmonary artery, CVP and respiratory tracings"></canvas>
+          <canvas id="ov" width="1000" height="540" aria-hidden="true"></canvas>
+        </div>
+        <div class="nums" aria-live="off">
+          <div class="num ecg"><span class="lab">HR</span><b id="n-hr">--</b><small id="n-rhy">bpm</small></div>
+          <div class="num art"><span class="lab">ART</span><b id="n-art">--/--</b><small id="n-map">(--)</small></div>
+          <div class="num pa"><span class="lab" id="n-pa-lab">PA</span><b id="n-pa">--/--</b><small id="n-pam">(--)</small></div>
+          <div class="num cvp"><span class="lab">CVP</span><b id="n-cvp">--</b><small id="n-cvpee">end-exp --</small></div>
+          <div class="num resp"><span class="lab" id="n-ppv-lab">PPV</span><b id="n-ppv">--</b><small id="n-ppv-sub">&nbsp;</small></div>
+        </div>
+      </div>
+      <div class="toolbar">
+        <button class="btn freeze" id="freeze" aria-pressed="false">Freeze</button>
+        <button class="btn" id="float">Float PA catheter</button>
+        <button class="btn" id="flush">Fast-flush test</button>
+        <span class="hint" id="hint">Space bar freezes. When frozen, hover or tap any trace to read its pressure.</span>
+      </div>
+    </div>
+    <section class="panel guide">
+      <div class="tabs" role="tablist" aria-label="Waveform guide">
+        <button class="tab" role="tab" data-g="pt" aria-selected="true">This patient</button>
+        <button class="tab" role="tab" data-g="cvp">CVP waves</button>
+        <button class="tab" role="tab" data-g="art">Arterial line</button>
+        <button class="tab" role="tab" data-g="pac">PA catheter</button>
+      </div>
+      <div id="guide"></div>
+    </section>
+    </div>
+
+    <div class="rack">
+      <section class="panel">
+        <h2>Patient</h2>
+        <div class="scen" id="scen"></div>
+      </section>
+      <section class="panel">
+        <h2>Lines</h2>
+        <div class="ctl"><span class="lbl">PA catheter tip</span><output id="pos-o"></output>
+          <div class="seg" id="pos"><button data-v="RA">RA</button><button data-v="RV">RV</button><button data-v="PA">PA</button><button data-v="PAWP">Wedge</button></div></div>
+        <div class="ctl"><span class="lbl">Arterial line damping</span><output id="damp-o"></output>
+          <div class="seg" id="damp"><button data-v="optimal">Optimal</button><button data-v="under">Under</button><button data-v="over">Over</button></div></div>
+        <div class="ctl"><span class="lbl">Rhythm</span><output id="rhy-o"></output>
+          <div class="seg" id="rhythm"><button data-v="sinus">Sinus</button><button data-v="af">AF</button><button data-v="chb">CHB</button><button data-v="junc">Junct</button></div></div>
+        <div class="ctl"><span class="lbl">Breathing</span><output id="vent-o"></output>
+          <div class="seg" id="vent"><button data-v="spont">Spontaneous</button><button data-v="mech">Ventilator</button></div></div>
+        <div class="ctl"><span class="lbl">Sweep speed</span><output id="sw-o"></output>
+          <div class="seg" id="sweep"><button data-v="12.5">12.5</button><button data-v="25">25</button><button data-v="50">50</button></div></div>
+      </section>
+      <section class="panel">
+        <h2>Pressures</h2>
+        <div class="grid2">
+          <div class="ctl"><label for="hr">HR</label><output id="hr-o"></output><input type="range" id="hr" min="30" max="160" step="1"></div>
+          <div class="ctl"><label for="co">CO</label><output id="co-o"></output><input type="range" id="co" min="1.5" max="10" step="0.1"></div>
+          <div class="ctl"><label for="sbp">SBP</label><output id="sbp-o"></output><input type="range" id="sbp" min="60" max="200" step="1"></div>
+          <div class="ctl"><label for="dbp">DBP</label><output id="dbp-o"></output><input type="range" id="dbp" min="25" max="120" step="1"></div>
+          <div class="ctl"><label for="pasp">PASP</label><output id="pasp-o"></output><input type="range" id="pasp" min="12" max="100" step="1"></div>
+          <div class="ctl"><label for="padp">PADP</label><output id="padp-o"></output><input type="range" id="padp" min="3" max="50" step="1"></div>
+          <div class="ctl"><label for="cvp">CVP</label><output id="cvp-o"></output><input type="range" id="cvp" min="0" max="30" step="1"></div>
+          <div class="ctl"><label for="pcwp">PAWP</label><output id="pcwp-o"></output><input type="range" id="pcwp" min="2" max="40" step="1"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <div class="lower">
+      <section class="panel">
+        <h2>Hemodynamic profile</h2>
+        <div class="rows" id="calc"></div>
+        <div class="flags" id="flags"></div>
+        <p class="muted" style="margin:10px 0 0">Calculated from the values set on the right, with BSA 1.9 m² and thermodilution CO.</p>
+      </section>
+      <section class="panel">
+        <h2>Mystery patient<span class="score" id="score"></span></h2>
+        <div id="quiz"><p class="fb">Load an unlabeled patient, float the catheter, read the tracings, then pick the diagnosis.</p></div>
+        <div style="margin-top:10px"><button class="primary" id="q-new">New mystery patient</button></div>
+      </section>
+  </div>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const g=(x,c,w)=>Math.exp(-(((x-c)/w)**2));
+const g4=(x,c,w)=>Math.exp(-(((x-c)/w)**4));
+
+/* ---------------- scenarios ---------------- */
+const BASE={hr:75,rhythm:'sinus',atrial:78,vent:'spont',sbp:120,dbp:75,cvp:6,pasp:25,padp:10,pcwp:9,co:5.5,
+  ra:{a:3,c:1,x:2,v:2.5,y:2,cv:0,yw:1},la:{a:3,v:4,x:2,y:2.5,yw:1},
+  sqrt:false,kussmaul:false,paradox:5,ppv:0.06,alt:0,notch:0.5,mrV:0};
+const SCEN={
+ normal:{name:'Normal',p:{},
+  teach:['RA 2 to 8, RV 20 to 30 over 2 to 8, PA 20 to 30 over 8 to 12, PAWP 6 to 12 mmHg.',
+   'CVP shows a, c and v waves with x and y descents. PAWP shows a and v waves, delayed about 0.1 s versus the RA trace because the left atrial signal travels back through the pulmonary bed.',
+   'PADP sits 1 to 4 mmHg above PAWP. Arterial trace has a sharp upstroke and a dicrotic notch about one third down the downslope.']},
+ hypo:{name:'Hypovolemia',p:{hr:118,sbp:86,dbp:56,cvp:2,pasp:18,padp:7,pcwp:4,co:3.2,vent:'mech',ppv:0.22,ra:{a:2,v:1.5,x:1.5,y:1.5}},
+  teach:['Low filling pressures (CVP and PAWP), narrow pulse pressure, tachycardia, low CO with a high SVR.',
+   'On the ventilator the arterial pulse pressure swings with each breath. Slow the sweep to 12.5 mm/s to see it. PPV above about 13% predicts fluid responsiveness when tidal volume is at least 8 mL/kg, the rhythm is regular, and the patient is not breathing spontaneously.']},
+ cardio:{name:'Cardiogenic shock',p:{hr:108,sbp:84,dbp:64,cvp:13,pasp:52,padp:30,pcwp:28,co:2.6,vent:'mech',ppv:0.04,alt:0.12,notch:0.55,la:{a:5,v:9,y:3}},
+  teach:['High PAWP, low cardiac index, narrow pulse pressure and a high SVR.',
+   'Pulsus alternans: every other arterial beat is weaker in a regular rhythm, a sign of severe LV dysfunction.',
+   'Cardiac power output (MAP x CO / 451) below 0.6 W marks high risk. Low PPV here means the heart is unlikely to respond to more volume.']},
+ septic:{name:'Distributive shock',p:{hr:122,sbp:86,dbp:42,cvp:7,pasp:28,padp:12,pcwp:10,co:8.4,vent:'mech',ppv:0.11,notch:0.28},
+  teach:['Wide pulse pressure with a low diastolic pressure, a low dicrotic notch, and a fast diastolic runoff from low SVR.',
+   'High CO with normal or low filling pressures. SVR well below 800 dyn·s·cm⁻⁵.']},
+ tamp:{name:'Tamponade',p:{hr:124,sbp:88,dbp:68,cvp:18,pasp:34,padp:19,pcwp:18,co:2.9,paradox:20,ppv:0.06,ra:{a:2,x:6,v:2,y:0},la:{a:2,x:4,v:3,y:0}},
+  teach:['Equalized diastolic pressures: RA, RV diastolic, PADP and PAWP all within about 5 mmHg, usually 15 to 20.',
+   'Prominent x descent with a blunted or absent y descent, because the RA cannot empty into a compressed RV in early diastole.',
+   'Pulsus paradoxus: systolic pressure falls more than 10 mmHg with spontaneous inspiration. Watch the ART numeric swing.']},
+ pe:{name:'Massive PE',p:{hr:116,sbp:88,dbp:62,cvp:17,pasp:46,padp:24,pcwp:8,co:3.0,ra:{a:5,v:5,y:3}},
+  teach:['High RA and PA pressures with a normal PAWP. PADP is far above PAWP (diastolic pulmonary gradient over 7 mmHg) which points to a precapillary obstruction.',
+   'Acute RV failure: RA:PCWP ratio above 0.8. A previously normal RV rarely generates a PASP above about 55 to 60 mmHg acutely.']},
+ tr:{name:'Severe TR',p:{hr:92,rhythm:'af',sbp:112,dbp:68,cvp:16,pasp:42,padp:18,pcwp:14,co:4.0,ra:{a:0,c:0,x:0,v:0,cv:12,y:7,yw:0.8}},
+  teach:['Large c-v wave that fills systole and erases the x descent: the RA trace starts to look like the RV (ventricularization).',
+   'Steep y descent after the giant wave. AF is common, so there is no a wave.',
+   'The digital CVP mean overstates RV preload. Thermodilution CO is unreliable with severe TR.']},
+ mr:{name:'Acute MR',p:{hr:110,sbp:94,dbp:58,cvp:10,pasp:56,padp:26,pcwp:24,co:3.4,vent:'mech',ppv:0.05,mrV:24,la:{a:4,v:4,y:4}},
+  teach:['Giant v wave in the wedge tracing. It can be transmitted back into the PA trace, making the PA waveform look bifid. Inflate the balloon to compare.',
+   'Read the PAWP at the a wave or just before the v wave, not at the peak. A giant v wave can be mistaken for a PA tracing, so the catheter may be wedged when you think it is not.',
+   'A large v wave is not specific to MR: a stiff LA or a VSD can also produce one.']},
+ constr:{name:'Constriction',p:{hr:96,sbp:104,dbp:70,cvp:18,pasp:34,padp:20,pcwp:19,co:3.6,paradox:6,kussmaul:true,sqrt:true,ra:{a:5,x:7,v:5,y:10,yw:0.55},la:{a:4,x:5,v:5,y:8,yw:0.6}},
+  teach:['M or W shaped RA trace: prominent a wave, deep x and a steep, deep y descent from rapid early diastolic filling that stops abruptly.',
+   'RV dip and plateau (square root sign). Float the catheter to the RV to see it.',
+   'Kussmaul sign: RA pressure fails to fall or rises with spontaneous inspiration. Diastolic pressures equalize, as in tamponade, but the y descent is preserved.']},
+ chb:{name:'Complete heart block',p:{hr:38,rhythm:'chb',atrial:78,sbp:134,dbp:52,cvp:9,pasp:30,padp:13,pcwp:12,co:3.6},
+  teach:['P waves march through at their own rate with no relation to the QRS.',
+   'Cannon a waves appear intermittently on the CVP when atrial contraction lands during ventricular systole, against a closed tricuspid valve.',
+   'Beat-to-beat variation in arterial pulse pressure from variable filling and atrial contribution. Wide pulse pressure from the large stroke volume of a slow rate.']},
+ af:{name:'Atrial fibrillation',p:{hr:112,rhythm:'af',sbp:108,dbp:66,cvp:8,pasp:32,padp:15,pcwp:15,co:4.4,ra:{a:0},la:{a:0}},
+  teach:['Irregularly irregular RR with fibrillatory baseline and no P waves.',
+   'No a wave on the CVP or wedge; the c wave and v wave remain.',
+   'Pulse pressure varies with the preceding RR interval (Frank-Starling), so PPV and SPV are not valid in AF.']},
+ pah:{name:'Pulmonary hypertension',p:{hr:98,sbp:102,dbp:64,cvp:13,pasp:82,padp:34,pcwp:9,co:3.4,ra:{a:7,v:4,y:2}},
+  teach:['Markedly elevated PA pressures with a normal PAWP: precapillary pulmonary hypertension (mPAP above 20, PAWP 15 or less, PVR above 2 WU).',
+   'Tall RA a wave from a hypertrophied, stiff RV. RV systolic pressure matches PASP.',
+   'Large diastolic pulmonary gradient. Fluids are poorly tolerated; RV failure drives hypotension.']}
+};
+const ORDER=['normal','hypo','cardio','septic','tamp','pe','tr','mr','constr','chb','af','pah'];
+
+const GUIDE={
+ cvp:`<h3>Reading the CVP</h3><ul>
+  <li><b>a wave</b>: right atrial contraction, just after the P wave. Absent in AF. Tall with a stiff RV or tricuspid stenosis. <b>Cannon a</b> when the atrium contracts against a closed tricuspid valve (AV dissociation, junctional rhythm, PVCs).</li>
+  <li><b>c wave</b>: tricuspid valve bulging back into the RA at the start of systole, just after the QRS.</li>
+  <li><b>x descent</b>: atrial relaxation and descent of the tricuspid annulus in systole. Prominent in tamponade, lost in severe TR.</li>
+  <li><b>v wave</b>: venous filling against a closed tricuspid valve, late systole near the end of the T wave. Giant c-v wave in TR.</li>
+  <li><b>y descent</b>: tricuspid valve opens and the RA empties. Steep in constriction and TR, blunted or absent in tamponade.</li>
+  <li><b>Where to read it</b>: at end-expiration, at the base of the c wave (the z point) or the mean of the a wave. That is the end-expiratory value on the monitor. The digital mean averages across the whole breath and shifts with breathing effort.</li></ul>`,
+ art:`<h3>Arterial line</h3><ul>
+  <li><b>Components</b>: systolic upstroke, peak, dicrotic notch (aortic valve closure), diastolic runoff. A low notch and fast runoff suggest low SVR.</li>
+  <li><b>Fast-flush (square wave) test</b>: press the button. An optimally damped system rings 1.5 to 2 times and settles.</li>
+  <li><b>Underdamped</b>: many oscillations, systolic overshoot. Overestimates SBP and underestimates DBP.</li>
+  <li><b>Overdamped</b>: no oscillation, slurred upstroke, lost notch. Underestimates SBP and overestimates DBP. Look for air bubbles, clot, kinks, or compliant tubing.</li>
+  <li><b>MAP</b> is the most robust number: it changes little with either damping error.</li>
+  <li><b>Respiratory variation</b>: on a ventilator, PPV above about 13% suggests fluid responsiveness if VT is at least 8 mL/kg, rhythm is regular, and there is no spontaneous effort. With spontaneous breathing, an inspiratory SBP fall over 10 mmHg is pulsus paradoxus.</li></ul>`,
+ pac:`<h3>Floating the PA catheter</h3><ul>
+  <li><b>RA</b> (about 20 to 25 cm from the right IJ): low-pressure atrial waveform. Inflate the balloon with 1.5 mL here.</li>
+  <li><b>RV</b> (30 to 35 cm): sudden systolic rise, diastolic pressure near zero that climbs through diastole. Ectopy is common here, so advance steadily.</li>
+  <li><b>PA</b> (40 to 45 cm): diastolic step-up, a dicrotic notch, and a downsloping diastolic runoff. If you are not in the PA by about 50 cm, suspect coiling: deflate, withdraw, retry.</li>
+  <li><b>Wedge</b> (45 to 55 cm): atrial-looking trace with a and v waves, mean at or below PADP. Deflate promptly and confirm the PA trace returns.</li>
+  <li><b>Reading PAWP</b>: end-expiration, at the mean of the a wave (or just before the c wave). With a giant v wave, use the pre-v value. With intubation and high PEEP, the zone 3 assumption may fail.</li>
+  <li><b>PADP and PAWP</b>: normally within about 4 mmHg. A larger gap (DPG of 7 or more) means pulmonary vascular disease, PE or hypoxic vasoconstriction.</li></ul>`
+};
+
+/* ---------------- state ---------------- */
+const S=JSON.parse(JSON.stringify(BASE));
+Object.assign(S,{scen:'normal',pos:'PA',damp:'optimal',sweep:25,frozen:false,quiz:null});
+
+/* ---------------- simulation ---------------- */
+const STEP=0.001;
+let t=0,nextA=0.05,vq=[],lastA=[-9,-9],aCannon=[false,false],lastV=[-9,-9],vType=['n','n'],vTimes=[],beatN=0;
+let artB=[],paB=[],rvB=[];
+let artTrue=75,paTrue=10,rvTrue=6,raTrue=6,laTrue=9,laLP=9,emaRA=0,emaLA=0;
+let fy=75,fyd=0,flushUntil=-1,flushing=false;
+const cur={ecg:0,art:75,pa:10,cvp:6,resp:0,r:0};
+const RRn=()=>60/S.hr;
+const ETf=()=>clamp(0.413-0.0017*S.hr,0.2,0.34);
+
+function resp(tt){
+  const mech=S.vent==='mech',T=60/(mech?16:14),ti=mech?T/3:T*0.4,ph=((tt%T)+T)%T;
+  if(ph<ti) return mech?ph/ti:0.5-0.5*Math.cos(Math.PI*ph/ti);
+  return mech?Math.exp(-(ph-ti)/0.32):0.5+0.5*Math.cos(Math.PI*Math.min(1,(ph-ti)/(T*0.33)));
+}
+function respPeriod(){return 60/(S.vent==='mech'?16:14)}
+
+function resetRhythm(){
+  vq=[];nextA=t+0.05;
+  if(S.rhythm==='af'||S.rhythm==='junc'){nextA=Infinity;vq.push({t:t+0.1,type:'n'})}
+  if(S.rhythm==='chb'){vq.push({t:t+0.3,type:'n'})}
+}
+function upcomingV(){let m=Infinity;for(const e of vq)if(e.t<m)m=e.t;return m}
+function fireA(ta){
+  const c=(ta-lastV[0])<ETf()+0.06 || (upcomingV()-ta)<0.05;
+  lastA=[ta,lastA[0]];aCannon=[c,aCannon[0]];
+  if(S.rhythm==='sinus'){vq.push({t:ta+0.16,type:'n'});nextA=ta+RRn()*(1+(S.vent==='spont'?-0.03*resp(ta):0))}
+  else if(S.rhythm==='chb'){nextA=ta+60/S.atrial}
+  else nextA=Infinity;
+}
+function mkPulse(arr,t0,Ps,Pd,notch,Pf,tr,dicF){
+  const ET=ETf(),Pn=Pd+notch*(Ps-Pd);
+  const ratio=Math.max(1.05,(Pn-Pf)/Math.max(0.5,Pd-Pf));
+  const tau=Math.max(0.12,(RRn()-ET-0.09)/Math.log(ratio));
+  arr.push({t0,P0:null,Ps,Pd,Pn,Pf,ET,tr,tau,dic:dicF*(Ps-Pd),seen:false});
+  if(arr.length>4)arr.shift();
+}
+function fireV(ev){
+  const minGap=vType[0]==='pvc'?0.45:0.28;
+  if(ev.type==='n'&&ev.t-lastV[0]<minGap){if(S.rhythm!=='sinus')vq.push({t:lastV[0]+minGap+0.05,type:'n'});return}
+  const RRprev=ev.t-lastV[0];
+  lastV=[ev.t,lastV[0]];vType=[ev.type,vType[0]];vTimes.push(ev.t);if(vTimes.length>40)vTimes.shift();
+  beatN++;
+  const r=resp(ev.t),mech=S.vent==='mech';
+  let fs=clamp(1+0.45*(Math.min(RRprev,3)/RRn()-1),0.45,1.4);
+  if(ev.type==='pvc')fs*=0.6;
+  let pf=mech?1+S.ppv*(r-0.5):1;
+  const alt=S.alt?(beatN%2?1+S.alt:1-S.alt):1;
+  const off=mech?2.5*r:-S.paradox*r;
+  const PP=(S.sbp-S.dbp)*fs*pf*alt;
+  const Pd=S.dbp+off*0.6;
+  mkPulse(artB,ev.t+0.11,Pd+PP+off*0.4,Pd,S.notch,Pd*0.55,0.09,0.1);
+  const pPP=(S.pasp-S.padp)*clamp(fs,0.6,1.25);
+  mkPulse(paB,ev.t+0.07,S.padp+pPP,S.padp,0.55,Math.min(S.pcwp,S.padp-1)*0.9,0.08,0.07);
+  rvB.push({t0:ev.t+0.03,P0:null,sp:S.padp+pPP+1,edp:S.cvp});if(rvB.length>4)rvB.shift();
+  // scheduling
+  const RR=RRn();
+  if(S.rhythm==='af'&&ev.type==='n')vq.push({t:ev.t+RR*(0.62+0.76*Math.random()),type:'n'});
+  if(S.rhythm==='chb'&&ev.type==='n')vq.push({t:ev.t+RR,type:'n'});
+  if(S.rhythm==='junc'&&ev.type==='n'){vq.push({t:ev.t+RR,type:'n'});nextA=ev.t+0.03}
+  if(S.pos==='RV'&&ev.type==='n'&&Math.random()<0.22&&S.rhythm!=='chb')vq.push({t:ev.t+0.5*RR,type:'pvc'});
+  if(S.rhythm==='af'&&ev.type==='pvc'){/* af schedule continues from normal beat */}
+}
+function pulseVal(b,tt,curV){
+  const s=tt-b.t0;if(b.P0===null)b.P0=curV;
+  if(s<b.tr)return b.P0+(b.Ps-b.P0)*Math.sin(Math.PI/2*s/b.tr);
+  if(s<b.ET)return b.Ps-(b.Ps-b.Pn)*Math.pow((s-b.tr)/(b.ET-b.tr),1.7);
+  const dw=0.09;
+  if(s<b.ET+dw)return b.Pn+b.dic*Math.sin(Math.PI*(s-b.ET)/dw);
+  return b.Pf+(b.Pn-b.Pf)*Math.exp(-(s-b.ET-dw)/b.tau);
+}
+function activeBeat(arr,tt){for(let i=arr.length-1;i>=0;i--)if(arr[i].t0<=tt)return arr[i];return null}
+function rvVal(b,tt,curV){
+  const s=tt-b.t0;if(b.P0===null)b.P0=curV;
+  const ET=ETf(),tr=0.07,tf=0.08,pe=b.sp-0.12*(b.sp-b.edp);
+  if(s<tr)return b.P0+(b.sp-b.P0)*Math.sin(Math.PI/2*s/tr);
+  if(s<ET)return b.sp-0.12*(b.sp-b.edp)*((s-tr)/(ET-tr))**2;
+  const mn=S.sqrt?b.edp*0.15:Math.max(b.edp*0.2,b.edp-8);
+  if(s<ET+tf)return pe+(mn-pe)*(0.5-0.5*Math.cos(Math.PI*(s-ET)/tf));
+  const sd=s-ET-tf,k=S.sqrt?0.03:0.2;
+  return mn+(b.edp-mn)*(1-Math.exp(-sd/k));
+}
+function atrialBumps(P,tt,delay,isLA){
+  const ET=ETf();let v=0;
+  for(let k=0;k<2;k++){
+    const sa=tt-lastA[k];
+    if(sa>=0&&sa<0.4)v+=P.a*(aCannon[k]&&!isLA?3:aCannon[k]?2:1)*g(sa,0.1+delay,0.035);
+  }
+  for(let k=0;k<2;k++){
+    const sv=tt-lastV[k]-delay;if(sv<-0.1||sv>1.2)continue;
+    v+=(P.c||0)*g(sv,0.08,0.022)-P.x*g(sv,0.2+(ET-0.3)*0.5,0.06)+P.v*g(sv,ET+0.1,0.07)-P.y*g(sv,ET+0.27,0.075*(P.yw||1));
+    if(P.cv)v+=P.cv*g4(sv,0.05+(ET+0.08)/2,(ET+0.1)/2);
+    if(isLA&&S.mrV)v+=S.mrV*g(sv,ET+0.08,0.085);
+  }
+  return v;
+}
+function step(dt){
+  t+=dt;
+  while(t>=nextA)fireA(nextA);
+  for(;;){let i=-1,m=Infinity;vq.forEach((e,j)=>{if(e.t<m){m=e.t;i=j}});if(i<0||m>t)break;const e=vq.splice(i,1)[0];fireV(e)}
+  const r=resp(t),mech=S.vent==='mech',sgn=mech?1:-1;
+  cur.r=r;
+  // arterial
+  const ab=activeBeat(artB,t);artTrue=ab?pulseVal(ab,t,artTrue):S.dbp;
+  // RA / LA
+  const bRA=atrialBumps(S.ra,t,0,false);emaRA+=(bRA-emaRA)*dt/3;
+  const itpRA=S.kussmaul&&!mech?3*r:sgn*4*r;
+  raTrue=S.cvp+bRA-emaRA+itpRA;
+  const bLA=atrialBumps(S.la,t,0.03,true);emaLA+=(bLA-emaLA)*dt/3;
+  laTrue=S.pcwp+bLA-emaLA+sgn*5*r;
+  laLP+=(laTrue-laLP)*dt/0.025;
+  // PA / RV
+  const pb=activeBeat(paB,t);paTrue=(pb?pulseVal(pb,t,paTrue-sgn*5*r):S.padp)+sgn*5*r;
+  if(S.mrV&&lastV[0]>0){const sv=t-lastV[0]-0.05;paTrue+=S.mrV*0.4*g(sv,ETf()+0.12,0.08)}
+  const rb=activeBeat(rvB,t);
+  const rvBase=rb?rvVal(rb,t,rvTrue-sgn*4*r):S.cvp;
+  let aKick=0;for(let k=0;k<2;k++){const sa=t-lastA[k];if(sa>=0&&sa<0.3&&!aCannon[k])aKick+=S.ra.a*0.6*g(sa,0.11,0.04)}
+  rvTrue=rvBase+aKick+sgn*4*r;
+  // arterial transducer: 2nd order system
+  const D={optimal:[20,0.6],under:[9,0.12],over:[4,1.6]}[S.damp];
+  const wn=2*Math.PI*D[0];
+  const u=t<flushUntil?300:artTrue;
+  fyd+=(wn*wn*(u-fy)-2*D[1]*wn*fyd)*dt;fy+=fyd*dt;
+  // outputs
+  cur.art=fy;cur.cvp=raTrue;cur.resp=r;
+  cur.pa=S.pos==='RA'?raTrue:S.pos==='RV'?rvTrue:S.pos==='PA'?paTrue:laLP;
+  trackBeats();
+  // numerics accumulators
+  const a=dt/5;mArt+=(fy-mArt)*a;mPA+=(cur.pa-mPA)*a;mCVP+=(raTrue-mCVP)*dt/6;
+  if(r<0.05){eeCVP+=(raTrue-eeCVP)*dt/0.8;eePA+=(cur.pa-eePA)*dt/0.8}
+}
+let mArt=80,mPA=15,mCVP=6,eeCVP=6,eePA=9;
+let aMax=-1e9,aMin=1e9,pMax=-1e9,pMin=1e9,artRec=[],paRec=[];
+function trackBeats(){
+  const fl=t<flushUntil+1.2;
+  aMax=Math.max(aMax,fy);aMin=Math.min(aMin,fy);pMax=Math.max(pMax,cur.pa);pMin=Math.min(pMin,cur.pa);
+  const ab=artB[artB.length-1];
+  if(ab&&!ab.seen&&ab.t0<=t){ab.seen=true;if(!fl&&aMax>-1e8)artRec.push({t,sys:aMax,dia:aMin});aMax=aMin=fy;if(artRec.length>40)artRec.shift()}
+  const arr=S.pos==='RV'?rvB:paB,pb=arr[arr.length-1];
+  if(pb&&!pb.seenP&&pb.t0<=t){pb.seenP=true;if(pMax>-1e8)paRec.push({t,sys:pMax,dia:pMin});pMax=pMin=cur.pa;if(paRec.length>40)paRec.shift()}
+  if(fl)flushing=true;else flushing=false;
+}
+function ecgVal(tt){
+  let v=0;
+  if(S.rhythm==='af')v+=0.035*Math.sin(2*Math.PI*6.1*tt)+0.025*Math.sin(2*Math.PI*8.7*tt+1.3)+0.015*Math.sin(2*Math.PI*4.3*tt+.4);
+  for(let k=0;k<2;k++){const sa=tt-lastA[k];if(sa>=0&&sa<0.3)v+=(S.rhythm==='junc'?-0.1:0.13)*g(sa,0.05,0.022)}
+  const qt=clamp(0.4*Math.sqrt(60/S.hr),0.28,0.5);
+  for(let k=0;k<2;k++){const sv=tt-lastV[k];if(sv<0||sv>0.75)continue;
+    if(vType[k]==='pvc')v+=0.95*g(sv,0.06,0.035)-0.55*g(sv,0.14,0.04)-0.3*g(sv,0.36,0.07);
+    else v+=-0.1*g(sv,0.012,0.008)+1.0*g(sv,0.03,0.011)-0.22*g(sv,0.055,0.009)+0.27*g(sv,qt-0.06,0.05);}
+  return v+(Math.random()-.5)*0.012;
+}
+
+/* ---------------- display ---------------- */
+const W=1000,H=540,GAP=18;
+const CH={ecg:{y0:8,h:84,min:-0.45,max:1.25,col:'#3BE36F'},
+  art:{y0:104,h:128,min:0,max:160,col:'#FF5B57',grid:40},
+  pa:{y0:244,h:128,min:0,max:40,col:'#FFD84A',grid:10},
+  cvp:{y0:384,h:100,min:0,max:20,col:'#57C7FF',grid:5},
+  resp:{y0:494,h:40,min:-0.1,max:1.15,col:'#D9E2E6'}};
+const KEYS=['ecg','art','pa','cvp','resp'];
+const buf={};KEYS.forEach(k=>buf[k]=new Float32Array(W).fill(NaN));
+const posBuf=new Array(W).fill('');
+let sweepX=0,colAcc=0;
+const cv=$('cv'),ctx=cv.getContext('2d'),ov=$('ov'),octx=ov.getContext('2d');
+let scale=1;
+function fitCanvas(){
+  const r=cv.getBoundingClientRect(),dpr=window.devicePixelRatio||1;
+  scale=(r.width/W)*dpr;
+  for(const c of[cv,ov]){c.width=Math.round(W*scale);c.height=Math.round(H*scale)}
+  ctx.setTransform(scale,0,0,scale,0,0);octx.setTransform(scale,0,0,scale,0,0);
+  redrawAll();drawOverlay();
+}
+const yOf=(k,v)=>{const c=CH[k];return c.y0+c.h*(1-(v-c.min)/(c.max-c.min))};
+function clearSlice(x0,w){
+  ctx.fillStyle='#04080A';ctx.fillRect(x0,0,w,H);
+  ctx.strokeStyle='#14262E';ctx.lineWidth=1;ctx.beginPath();
+  for(const k of['art','pa','cvp']){const c=CH[k];for(let v=c.min;v<=c.max+0.01;v+=c.grid){const y=Math.round(yOf(k,v))+0.5;ctx.moveTo(x0,y);ctx.lineTo(x0+w,y)}}
+  ctx.stroke();
+}
+function seg(k,x){
+  const a=buf[k][x-1],b=buf[k][x];if(isNaN(a)||isNaN(b))return;
+  const c=CH[k],lo=c.y0-6,hi=c.y0+c.h+4;
+  ctx.moveTo(x-1,clamp(yOf(k,a),lo,hi));ctx.lineTo(x,clamp(yOf(k,b),lo,hi));
+}
+function drawSegs(x){
+  for(const k of KEYS){ctx.strokeStyle=CH[k].col;ctx.lineWidth=k==='resp'?1.2:1.7;ctx.beginPath();seg(k,x);ctx.stroke()}
+}
+function redrawAll(){
+  ctx.setTransform(scale,0,0,scale,0,0);clearSlice(0,W);
+  ctx.lineJoin='round';
+  for(const k of KEYS){ctx.strokeStyle=CH[k].col;ctx.lineWidth=k==='resp'?1.2:1.7;ctx.beginPath();for(let x=1;x<W;x++)seg(k,x);ctx.stroke()}
+}
+function sampleColumn(){
+  const x=sweepX;
+  buf.ecg[x]=ecgVal(t);buf.art[x]=cur.art;buf.pa[x]=cur.pa;buf.cvp[x]=cur.cvp;buf.resp[x]=cur.resp;posBuf[x]=S.pos;
+  for(let i=1;i<=GAP;i++){const gx=(x+i)%W;KEYS.forEach(k=>buf[k][gx]=NaN)}
+  const gx=(x+1)%W;clearSlice(gx,Math.min(GAP,W-gx));if(gx+GAP>W)clearSlice(0,gx+GAP-W);
+  if(x>0)drawSegs(x);
+  sweepX=(x+1)%W;
+}
+const posName={RA:'RA',RV:'RV',PA:'PA',PAWP:'PAWP'};
+function drawOverlay(cursor){
+  octx.clearRect(0,0,W,H);
+  octx.font='600 15px "Barlow Condensed", "Arial Narrow", sans-serif';octx.textBaseline='top';
+  const lab={ecg:'II',art:'ART',pa:posName[S.pos],cvp:'CVP',resp:S.vent==='mech'?'Paw':'RESP'};
+  for(const k of KEYS){
+    const c=CH[k];octx.fillStyle=c.col;octx.fillText(lab[k],6,c.y0+1);
+    if(c.grid){octx.font='500 11px "IBM Plex Mono", monospace';octx.fillStyle=c.col;octx.globalAlpha=.75;
+      octx.textBaseline='middle';octx.fillText(String(c.max),W-34,yOf(k,c.max)+7);octx.fillText(String(c.min),W-34,yOf(k,c.min)-7);
+      octx.globalAlpha=1;octx.textBaseline='top';octx.font='600 15px "Barlow Condensed", "Arial Narrow", sans-serif';}
+  }
+  if(S.frozen){
+    octx.fillStyle='#F0A24B';octx.font='600 14px "Barlow Condensed", sans-serif';octx.fillText('FROZEN',W-70,4);
+  }
+  if(cursor){
+    const {x,k}=cursor,v=buf[k][x];
+    octx.strokeStyle='rgba(255,255,255,.35)';octx.setLineDash([3,3]);octx.beginPath();octx.moveTo(x+.5,0);octx.lineTo(x+.5,H);octx.stroke();octx.setLineDash([]);
+    if(!isNaN(v)&&k!=='ecg'&&k!=='resp'){
+      const y=yOf(k,v);octx.fillStyle=CH[k].col;octx.beginPath();octx.arc(x,y,4,0,7);octx.fill();
+      const txt=`${k==='pa'?posName[posBuf[x]||S.pos]:lab[k]} ${v.toFixed(0)} mmHg`;
+      octx.font='500 13px "IBM Plex Mono", monospace';const tw=octx.measureText(txt).width+12;
+      const bx=x+10+tw>W?x-10-tw:x+10;octx.fillStyle='rgba(4,8,10,.88)';octx.fillRect(bx,y-11,tw,22);
+      octx.fillStyle=CH[k].col;octx.textBaseline='middle';octx.fillText(txt,bx+6,y);
+    }
+  }
+}
+function niceMax(v,step,minv){return Math.max(minv,Math.ceil(v/step)*step)}
+function updateScales(){
+  const before=[CH.art.max,CH.pa.max,CH.cvp.max].join();
+  CH.art.max=niceMax(S.sbp+35,40,160);
+  const paTop=Math.max(S.pasp+6,S.pcwp+S.mrV+S.la.v+8);
+  CH.pa.max=niceMax(paTop,10,40);CH.pa.grid=CH.pa.max>60?20:10;
+  CH.cvp.max=niceMax(S.cvp+Math.max(S.ra.a*3,S.ra.cv,S.ra.v,6)+6,10,20);CH.cvp.grid=CH.cvp.max>30?10:5;
+  if(before!==[CH.art.max,CH.pa.max,CH.cvp.max].join()){redrawAll()}
+  drawOverlay();
+}
+
+/* ---------------- numerics ---------------- */
+function recent(arr,win){return arr.filter(b=>t-b.t<=win)}
+function avg(a){return a.length?a.reduce((s,x)=>s+x,0)/a.length:NaN}
+const f0=v=>isNaN(v)?'--':Math.round(v);
+function updateNumerics(){
+  const iv=[];for(let i=1;i<vTimes.length;i++)if(t-vTimes[i]<10)iv.push(vTimes[i]-vTimes[i-1]);
+  $('n-hr').textContent=iv.length?Math.round(60/avg(iv)):'--';
+  $('n-rhy').textContent={sinus:'sinus',af:'AF',chb:'CHB',junc:'junctional'}[S.rhythm];
+  const ar=recent(artRec,6);
+  if(flushing){$('n-art').textContent='FLUSH';$('n-map').textContent='(--)'}
+  else{$('n-art').textContent=`${f0(avg(ar.map(b=>b.sys)))}/${f0(avg(ar.map(b=>b.dia)))}`;$('n-map').textContent=`(${f0(mArt)})`}
+  $('n-pa-lab').textContent=S.pos==='PAWP'?'PAWP':S.pos;
+  if(S.pos==='PAWP'||S.pos==='RA'){$('n-pa').textContent=f0(eePA);$('n-pam').textContent=`end-exp · mean ${f0(mPA)}`}
+  else{const pr=recent(paRec,6);$('n-pa').textContent=`${f0(avg(pr.map(b=>b.sys)))}/${f0(avg(pr.map(b=>b.dia)))}`;
+    $('n-pam').textContent=S.pos==='RV'?'sys / dia':`(${f0(mPA)})`}
+  $('n-cvp').textContent=f0(mCVP);$('n-cvpee').textContent=`end-exp ${f0(eeCVP)}`;
+  const win=respPeriod()*1.6,rb=recent(artRec,win);
+  if(rb.length>=3){
+    const pps=rb.map(b=>b.sys-b.dia),sys=rb.map(b=>b.sys);
+    const mx=Math.max(...pps),mn=Math.min(...pps);
+    if(S.vent==='mech'){$('n-ppv-lab').textContent='PPV';$('n-ppv').textContent=Math.round(100*(mx-mn)/((mx+mn)/2))+'%';
+      $('n-ppv-sub').textContent=S.rhythm!=='sinus'?'invalid: irregular':'SPV '+Math.round(Math.max(...sys)-Math.min(...sys));}
+    else{$('n-ppv-lab').textContent='ΔSBP';$('n-ppv').textContent=Math.round(Math.max(...sys)-Math.min(...sys));$('n-ppv-sub').textContent='insp fall, mmHg'}
+  }
+  lastPPV=S.vent==='mech'&&rb.length>=3?(()=>{const p=rb.map(b=>b.sys-b.dia),mx=Math.max(...p),mn=Math.min(...p);return 100*(mx-mn)/((mx+mn)/2)})():NaN;
+}
+let lastPPV=NaN;
+
+/* ---------------- calcs ---------------- */
+function renderCalcs(){
+  const MAP=(S.sbp+2*S.dbp)/3,mPAP=(S.pasp+2*S.padp)/3,BSA=1.9,CI=S.co/BSA,SV=S.co/S.hr*1000;
+  const SVR=80*(MAP-S.cvp)/S.co,PVR=(mPAP-S.pcwp)/S.co,TPG=mPAP-S.pcwp,DPG=S.padp-S.pcwp;
+  const PAPi=S.cvp>0?(S.pasp-S.padp)/S.cvp:NaN,CPO=MAP*S.co/451,RAP=S.cvp/S.pcwp;
+  const rows=[['MAP',MAP.toFixed(0)+' mmHg'],['Mean PAP',mPAP.toFixed(0)+' mmHg'],['Cardiac index',CI.toFixed(1)+' L/min/m²'],
+   ['Stroke volume index',(SV/BSA).toFixed(0)+' mL/m²'],['SVR',SVR.toFixed(0)+' dyn·s·cm⁻⁵'],['PVR',PVR.toFixed(1)+' WU'],
+   ['TPG / DPG',`${TPG.toFixed(0)} / ${DPG.toFixed(0)} mmHg`],['PAPi',isNaN(PAPi)?'--':PAPi.toFixed(2)],['Cardiac power output',CPO.toFixed(2)+' W'],['RA : PAWP',RAP.toFixed(2)]];
+  $('calc').innerHTML=rows.map(([k,v])=>`<div class="row"><span class="k">${k}</span><b>${v}</b></div>`).join('');
+  const fl=[];
+  if(CI<2.2)fl.push('Cardiac index below 2.2: low output.');else if(CI>4)fl.push('Cardiac index above 4: high output state.');
+  if(CPO<0.6)fl.push('Cardiac power output below 0.6 W: high-risk shock range.');
+  if(S.pcwp>18)fl.push('PAWP above 18: left-sided congestion.');
+  if(mPAP>20){if(S.pcwp<=15&&PVR>2)fl.push('Precapillary PH: mPAP above 20, PAWP 15 or less, PVR above 2 WU.');
+    else if(S.pcwp>15)fl.push(PVR>2?'Combined pre- and postcapillary PH (PVR above 2 WU).':'Isolated postcapillary PH (PAWP above 15).');}
+  if(DPG>=7)fl.push('DPG 7 or more: pulmonary vascular component.');
+  if(!isNaN(PAPi)&&PAPi<0.9)fl.push('PAPi below 0.9: suggests RV failure.');
+  if(RAP>0.8)fl.push('RA:PAWP above 0.8: RV-predominant pattern.');
+  if(SVR<800)fl.push('SVR below 800: vasodilated.');else if(SVR>1400)fl.push('SVR above 1400: vasoconstricted.');
+  if(S.cvp>=12&&Math.abs(S.cvp-S.pcwp)<=5&&Math.abs(S.padp-S.pcwp)<=5)fl.push('RA, PADP and PAWP within 5 mmHg: diastolic equalization (tamponade or constriction).');
+  $('flags').innerHTML=fl.length?fl.map(x=>`<div class="flag">${x}</div>`).join(''):'<div class="flag ok">Profile within normal limits.</div>';
+}
+
+/* ---------------- guide ---------------- */
+let gTab='pt';
+function renderGuide(){
+  document.querySelectorAll('.tab').forEach(b=>b.setAttribute('aria-selected',b.dataset.g===gTab));
+  if(gTab!=='pt'){$('guide').innerHTML=GUIDE[gTab];return}
+  if(S.quiz&&!S.quiz.done){$('guide').innerHTML='<h3>Mystery patient</h3><p>The diagnosis is hidden. Float the catheter, wedge it, and compare RA, PADP and PAWP. Then answer in the Mystery patient panel.</p>';return}
+  const sc=SCEN[S.scen];
+  $('guide').innerHTML=`<h3>${sc.name}<span class="tag">${S.rhythm==='sinus'?'sinus':S.rhythm.toUpperCase()} · ${S.vent==='mech'?'ventilated':'spontaneous'}</span></h3><ul>${sc.teach.map(x=>`<li>${x}</li>`).join('')}</ul>`;
+}
+document.querySelectorAll('.tab').forEach(b=>b.addEventListener('click',()=>{gTab=b.dataset.g;renderGuide();postH()}));
+
+/* ---------------- controls ---------------- */
+const SL={hr:v=>v+' bpm',co:v=>(+v).toFixed(1)+' L/min',sbp:v=>v,dbp:v=>v,pasp:v=>v,padp:v=>v,cvp:v=>v,pcwp:v=>v};
+Object.keys(SL).forEach(k=>{$(k).addEventListener('input',e=>{let v=+e.target.value;
+  if(k==='dbp')v=Math.min(v,S.sbp-10);if(k==='sbp')v=Math.max(v,S.dbp+10);
+  if(k==='padp')v=Math.min(v,S.pasp-5);if(k==='pasp')v=Math.max(v,S.padp+5);
+  S[k]=v;e.target.value=v;$(k+'-o').textContent=SL[k](v);updateScales();renderCalcs();})});
+function segGroup(id,key,after){
+  const el=$(id);el.addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;
+    let v=b.dataset.v;if(key==='sweep')v=+v;S[key]=v;syncSeg();after&&after();});
+}
+function syncSeg(){
+  for(const [id,key] of [['pos','pos'],['damp','damp'],['rhythm','rhythm'],['vent','vent'],['sweep','sweep']])
+    $(id).querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v==String(S[key]))));
+  $('pos-o').textContent={RA:'20 to 25 cm',RV:'30 to 35 cm',PA:'40 to 45 cm',PAWP:'45 to 55 cm'}[S.pos];
+  $('damp-o').textContent='';$('rhy-o').textContent='';$('vent-o').textContent=S.vent==='mech'?'VC, 16/min':'14/min';$('sw-o').textContent=S.sweep+' mm/s';
+  $('m-pos').textContent=posName[S.pos];$('m-depth').textContent={RA:'22 cm',RV:'33 cm',PA:'45 cm',PAWP:'50 cm'}[S.pos];
+  $('m-bal').textContent=S.pos==='PAWP'||floatTimer?'inflated':'down';
+  $('m-vent').textContent=S.vent==='mech'?'ventilator':'spontaneous';
+}
+segGroup('pos','pos',()=>{stopFloat();paRec=[];drawOverlay();syncSeg()});
+segGroup('damp','damp',()=>{artRec=[]});
+segGroup('rhythm','rhythm',()=>{resetRhythm();renderGuide()});
+segGroup('vent','vent',()=>{drawOverlay();renderGuide()});
+segGroup('sweep','sweep');
+function syncControls(){Object.keys(SL).forEach(k=>{$(k).value=S[k];$(k+'-o').textContent=SL[k](S[k])});syncSeg();renderScenBtns()}
+
+function renderScenBtns(){
+  $('scen').innerHTML=ORDER.map(k=>`<button data-k="${k}" aria-pressed="${!S.quiz&&S.scen===k}">${SCEN[k].name}</button>`).join('');
+}
+$('scen').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.quiz=null;renderQuiz();applyScen(b.dataset.k)});
+function applyScen(k){
+  const sc=SCEN[k],p=JSON.parse(JSON.stringify(BASE));
+  Object.assign(p,sc.p,{ra:{...BASE.ra,...(sc.p.ra||{})},la:{...BASE.la,...(sc.p.la||{})}});
+  Object.assign(S,p);S.scen=k;
+  artRec=[];paRec=[];resetRhythm();syncControls();updateScales();renderGuide();renderCalcs();
+  $('m-pt').textContent=S.quiz?'Mystery patient':sc.name;postH();
+}
+
+/* float */
+let floatTimer=null;
+function stopFloat(){if(floatTimer){clearTimeout(floatTimer);floatTimer=null}$('float').textContent='Float PA catheter'}
+$('float').addEventListener('click',()=>{
+  if(floatTimer){stopFloat();syncSeg();return}
+  const seq=['RA','RV','PA','PAWP'];let i=0;
+  const go=()=>{S.pos=seq[i];paRec=[];drawOverlay();syncSeg();i++;
+    if(i<seq.length)floatTimer=setTimeout(go,4000);else{floatTimer=null;$('float').textContent='Float PA catheter';syncSeg()}};
+  $('float').textContent='Stop';go();
+});
+$('flush').addEventListener('click',()=>{if(S.frozen)return;flushUntil=t+0.5});
+
+/* freeze + cursor */
+function setFreeze(v){S.frozen=v;$('freeze').setAttribute('aria-pressed',String(v));$('freeze').textContent=v?'Unfreeze':'Freeze';drawOverlay()}
+$('freeze').addEventListener('click',()=>setFreeze(!S.frozen));
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!/INPUT|BUTTON|TEXTAREA/.test(e.target.tagName)){e.preventDefault();setFreeze(!S.frozen)}});
+function cursorAt(e){
+  const r=ov.getBoundingClientRect(),x=Math.round((e.clientX-r.left)/r.width*W),y=(e.clientY-r.top)/r.height*H;
+  let k='ecg';for(const kk of KEYS){const c=CH[kk];if(y>=c.y0-6&&y<=c.y0+c.h+6)k=kk}
+  return {x:clamp(x,0,W-1),k};
+}
+ov.addEventListener('pointermove',e=>{if(S.frozen)drawOverlay(cursorAt(e))});
+ov.addEventListener('pointerdown',e=>{if(S.frozen)drawOverlay(cursorAt(e))});
+ov.addEventListener('pointerleave',()=>{if(S.frozen)drawOverlay()});
+
+/* quiz */
+let score={r:0,n:0};
+function renderQuiz(){
+  $('score').textContent=score.n?`${score.r} / ${score.n}`:'';
+  if(!S.quiz){$('quiz').innerHTML='<p class="fb">Load an unlabeled patient, float the catheter, read the tracings, then pick the diagnosis.</p>';return}
+  const q=S.quiz;
+  $('quiz').innerHTML=`<p class="fb">${q.done?(q.right?'<b>Correct.</b> ':'<b>Not quite.</b> ')+'This is <b>'+SCEN[q.k].name+'</b>. The teaching points are in the guide.':'Which diagnosis fits these tracings?'}</p>
+   <div class="quiz-opts">${q.opts.map(o=>`<button data-o="${o}" class="${q.done?(o===q.k?'right':o===q.pick?'wrong':''):''}" ${q.done?'disabled':''}>${SCEN[o].name}</button>`).join('')}</div>`;
+}
+$('q-new').addEventListener('click',()=>{
+  const pool=ORDER.filter(k=>!S.quiz||k!==S.quiz.k),k=pool[Math.floor(Math.random()*pool.length)];
+  const others=ORDER.filter(x=>x!==k).sort(()=>Math.random()-.5).slice(0,3);
+  S.quiz={k,opts:[k,...others].sort(()=>Math.random()-.5),done:false};
+  applyScen(k);S.pos='PA';syncSeg();renderScenBtns();$('m-pt').textContent='Mystery patient';gTab='pt';renderGuide();renderQuiz();postH();
+});
+$('quiz').addEventListener('click',e=>{const b=e.target.closest('button[data-o]');if(!b||!S.quiz||S.quiz.done)return;
+  const q=S.quiz;q.pick=b.dataset.o;q.done=true;q.right=q.pick===q.k;score.n++;if(q.right)score.r++;
+  $('m-pt').textContent=SCEN[q.k].name;renderQuiz();renderGuide();postH();});
+
+/* loop */
+let last=performance.now(),simAcc=0,numT=0;
+function frame(now){
+  const dt=Math.min(0.05,(now-last)/1000);last=now;
+  if(!S.frozen){
+    simAcc+=dt;const colDt=(W/(S.sweep*5))/W; // 25 mm/s -> 8 s across
+    while(simAcc>=STEP){simAcc-=STEP;step(STEP);colAcc+=STEP;if(colAcc>=colDt){colAcc-=colDt;sampleColumn()}}
+    numT+=dt;if(numT>0.4){numT=0;updateNumerics()}
+  }
+  requestAnimationFrame(frame);
+}
+
+/* embed height */
+let lastH=0;
+function postH(){const h=Math.ceil(document.documentElement.scrollHeight);if(h!==lastH){lastH=h;try{parent.postMessage({labHeight:h,lab:'hemodynamics',hemoLabHeight:h},'*')}catch(e){}}}
+new ResizeObserver(()=>{postH()}).observe(document.body);
+new ResizeObserver(()=>fitCanvas()).observe(cv);
+
+applyScen('normal');renderQuiz();fitCanvas();requestAnimationFrame(frame);
+})();
+</script>
