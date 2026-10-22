@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>TCD Doppler Lab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one TCD spectral monitor with a vessel selector on the left, settings and interpretation rack on the right; stacks on phones. */
+:root{
+  --bg:#EEF2F3; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#14212B; --muted:#5A6B76; --line:#CBD5D9;
+  --accent:#0A7484; --accent-ink:#FFFFFF; --amber:#A65A12; --warn:#B3261E; --ok:#2E7D4F;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+  color-scheme:light;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0}
+[hidden]{display:none!important}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1320px;margin:0 auto;padding-block:20px 32px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.92rem;max-width:72ch}
+.tabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:8px;flex-wrap:wrap}
+.tab{font-family:var(--font-display);font-size:1.02rem;font-weight:600;letter-spacing:.03em;border:0;background:transparent;color:var(--muted);padding:6px 12px;border-radius:6px;cursor:pointer}
+.tab small{font-family:var(--font-mono);font-size:.68rem;font-weight:500;margin-left:5px;opacity:.8}
+.tab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:16px;align-items:start}
+@media (max-width:980px){.main{grid-template-columns:minmax(0,1fr)}}
+.monitor{background:#05080A;border-radius:10px;padding:10px;border:1px solid var(--line);min-width:0}
+.screen{position:relative;width:100%;aspect-ratio:900/400;max-width:100%}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{touch-action:none;cursor:crosshair}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{font-family:var(--font-body);font-size:.88rem;font-weight:500;border:1px solid #33454E;background:#111A1F;color:#D6E2E7;padding:6px 12px;border-radius:6px;cursor:pointer}
+.btn[aria-pressed="true"]{background:#49BFCD;border-color:#49BFCD;color:#06262B}
+.btn.freeze[aria-pressed="true"]{background:#F0A24B;border-color:#F0A24B;color:#2A1600}
+.btn:disabled{opacity:.4;cursor:not-allowed}
+.hint{color:#8EA3AD;font-size:.82rem;flex:1 1 220px;min-width:0}
+.rack{display:grid;gap:12px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h2{font-family:var(--font-display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-bottom:10px}
+.ctl label,.ctl .lbl{font-size:.88rem;font-weight:500}
+.ctl output{font-family:var(--font-mono);font-size:.85rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.seg{grid-column:1/-1;display:flex;gap:4px;flex-wrap:wrap}
+.seg button{flex:1;font-family:var(--font-mono);font-size:.8rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 6px;border-radius:5px;cursor:pointer}
+.seg button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.presets{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:12px}
+.presets button{font-size:.78rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:4px 8px;border-radius:5px;cursor:pointer}
+.presets button[aria-pressed="true"]{border-color:var(--accent);background:var(--accent);color:var(--accent-ink)}
+.rows{display:grid}
+.row{display:flex;justify-content:space-between;gap:10px;padding:5px 0;border-bottom:1px dashed var(--line);font-size:.9rem}
+.row:last-child{border-bottom:0}
+.row b{font-family:var(--font-mono);font-weight:500;font-variant-numeric:tabular-nums;white-space:nowrap}
+.row .k{color:var(--muted)}
+.pill{font-family:var(--font-mono);font-size:.75rem;padding:1px 7px;border-radius:999px;border:1px solid currentColor;white-space:nowrap}
+.pill.n{color:var(--ok)}.pill.m{color:var(--amber)}.pill.s{color:var(--warn)}
+.flag{font-size:.82rem;margin-top:8px;padding:8px 10px;border-radius:6px;background:var(--sunk);border-left:3px solid var(--amber)}
+.flag:empty{display:none}
+.lower{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px}
+@media (max-width:760px){.lower{grid-template-columns:minmax(0,1fr)}}
+.tbl-wrap{overflow-x:auto}
+table{border-collapse:collapse;width:100%;font-size:.86rem;min-width:480px}
+th,td{text-align:left;padding:6px 8px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font-family:var(--font-display);font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);font-size:.85rem}
+td{font-variant-numeric:tabular-nums}
+.note p{margin:0 0 8px;max-width:72ch}
+.note p:last-child{margin:0}
+.note h3{font-family:var(--font-display);font-size:1.05rem;letter-spacing:.03em;margin:10px 0 4px}
+.note h3:first-of-type{margin-top:0}
+.formula{font-family:var(--font-mono);font-size:.85rem;background:var(--sunk);padding:2px 6px;border-radius:4px}
+.meas-empty{color:var(--muted);font-size:.88rem;margin:0}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>TCD Doppler Lab</h1>
+      <p class="sub">Simulated transcranial Doppler spectra for each basal cerebral artery, with vasospasm, hyperemia, raised ICP and cerebral circulatory arrest patterns. Freeze, measure, and grade like you would at the bedside.</p>
+    </div>
+    <div class="tabs" role="tablist" aria-label="Vessel" id="vtabs"></div>
+  </header>
+
+  <div class="main">
+    <div class="monitor">
+      <div class="screen">
+        <canvas id="spec" width="900" height="400" aria-label="Transcranial Doppler spectral display"></canvas>
+        <canvas id="ov" width="900" height="400" aria-hidden="true"></canvas>
+      </div>
+      <div class="toolbar">
+        <button class="btn freeze" id="freeze" aria-pressed="false">Freeze</button>
+        <button class="btn" id="tool-caliper" aria-pressed="true" disabled>Caliper</button>
+        <button class="btn" id="tool-trace" aria-pressed="false" disabled>Trace</button>
+        <button class="btn" id="clear" disabled>Clear</button>
+        <button class="btn" id="env" aria-pressed="false">Show envelope</button>
+        <span class="hint">Space bar freezes. Caliper: tap PSV, then EDV. Trace: drag along the outer edge of one beat for MFV and PI.</span>
+      </div>
+    </div>
+
+    <div class="rack">
+      <section class="panel">
+        <h2>Scenario</h2>
+        <div class="presets" id="pre"></div>
+        <div class="ctl"><label for="mca">MCA mean velocity</label><output id="mca-o"></output><input type="range" id="mca" min="20" max="260" step="1"></div>
+        <div class="ctl"><label for="ica">Extracranial ICA mean velocity</label><output id="ica-o"></output><input type="range" id="ica" min="15" max="90" step="1"></div>
+        <div class="ctl"><label for="pi">Pulsatility index</label><output id="pi-o"></output><input type="range" id="pi" min="0.5" max="3" step="0.05"></div>
+        <div class="ctl"><label for="hr">Heart rate</label><output id="hr-o"></output><input type="range" id="hr" min="45" max="140" step="1"></div>
+        <div class="ctl"><label for="ang">Insonation angle</label><output id="ang-o"></output><input type="range" id="ang" min="0" max="40" step="1"></div>
+        <div class="ctl"><label for="gain">Gain</label><output id="gain-o"></output><input type="range" id="gain" min="0.2" max="1.4" step="0.05"></div>
+        <div class="ctl"><label for="scl">Velocity scale</label><output id="scl-o"></output><input type="range" id="scl" min="0.3" max="2.6" step="0.05"></div>
+      </section>
+    </div>
+  </div>
+
+  <div class="lower">
+    <section class="panel">
+      <h2>Machine calculations</h2>
+      <div class="rows" id="calc"></div>
+      <div class="flag" id="flag"></div>
+    </section>
+    <section class="panel">
+      <h2>Your measurement</h2>
+      <div id="meas"><p class="meas-empty">Freeze the screen to measure.</p></div>
+    </section>
+    <section class="panel">
+      <h2>Normal adult values</h2>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Vessel</th><th>Window</th><th>Depth</th><th>Direction</th><th>MFV</th></tr></thead>
+        <tbody>
+          <tr><td>MCA (M1)</td><td>Temporal</td><td>45 to 65 mm</td><td>Toward</td><td>55 ± 12 cm/s</td></tr>
+          <tr><td>ACA (A1)</td><td>Temporal</td><td>60 to 75 mm</td><td>Away</td><td>50 ± 11 cm/s</td></tr>
+          <tr><td>PCA (P1)</td><td>Temporal</td><td>60 to 70 mm</td><td>Toward</td><td>40 ± 10 cm/s</td></tr>
+          <tr><td>Basilar</td><td>Suboccipital</td><td>80 to 110 mm</td><td>Away</td><td>41 ± 10 cm/s</td></tr>
+          <tr><td>Vertebral</td><td>Suboccipital</td><td>60 to 80 mm</td><td>Away</td><td>38 ± 10 cm/s</td></tr>
+          <tr><td>ICA (extracranial)</td><td>Submandibular</td><td>40 to 60 mm</td><td>Away</td><td>About 30 cm/s</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+    <section class="panel">
+      <h2>MCA vasospasm grading</h2>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>MCA MFV</th><th>Lindegaard ratio</th><th>Interpretation</th></tr></thead>
+        <tbody>
+          <tr><td>&lt; 120 cm/s</td><td>&lt; 3</td><td>Normal</td></tr>
+          <tr><td>120 to 200 cm/s</td><td>3 to 6</td><td>Mild to moderate vasospasm</td></tr>
+          <tr><td>&gt; 200 cm/s</td><td>&gt; 6</td><td>Severe vasospasm</td></tr>
+          <tr><td>High</td><td>&lt; 3</td><td>Hyperemia (high flow, not narrowing)</td></tr>
+        </tbody>
+      </table></div>
+    </section>
+    <section class="panel note" style="grid-column:1/-1">
+      <h2>How to acquire and read</h2>
+      <h3>Windows</h3>
+      <p>Temporal window above the zygomatic arch for the MCA, ACA and PCA. Suboccipital window through the foramen magnum for the vertebral and basilar arteries. Submandibular window for the extracranial ICA, used as the denominator of the Lindegaard ratio. Orbital insonation needs reduced power. About 10 to 20 percent of adults, more often older women, have an inadequate temporal window.</p>
+      <h3>Measurements</h3>
+      <p>Trace the outer envelope. <span class="formula">MFV = (PSV + 2 × EDV) / 3</span> approximates the time-averaged peak. <span class="formula">PI = (PSV − EDV) / MFV</span> (Gosling), normal about 0.6 to 1.1. <span class="formula">RI = (PSV − EDV) / PSV</span>. <span class="formula">Lindegaard ratio = MCA MFV / extracranial ICA MFV</span>.</p>
+      <h3>Interpretation</h3>
+      <p>A rising PI with falling diastolic velocity suggests rising intracranial pressure or falling cerebral perfusion pressure, but PI also changes with heart rate, CO2, cardiac output and aortic regurgitation. Oscillating (to-and-fro) flow and small systolic spikes indicate cerebral circulatory arrest; use them only within your institution's brain death protocol, as an ancillary test, with repeated examinations of both MCAs and the basilar artery.</p>
+    </section>
+  </div>
+</div>
+
+<script>
+(()=>{
+const W=900,H=400,HS=330,ECG0=342;
+const $=id=>document.getElementById(id);
+const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
+const g=(x,c,w)=>Math.exp(-(((x-c)/w)**2));
+const spec=$('spec'),sctx=spec.getContext('2d'),ov=$('ov'),octx=ov.getContext('2d');
+
+const VESSELS={
+  mca:{name:'MCA',full:'MCA (M1)',win:'Temporal',depth:55,dir:1,norm:55},
+  aca:{name:'ACA',full:'ACA (A1)',win:'Temporal',depth:68,dir:-1,norm:50},
+  pca:{name:'PCA',full:'PCA (P1)',win:'Temporal',depth:65,dir:1,norm:40},
+  ba:{name:'BA',full:'Basilar',win:'Suboccipital',depth:95,dir:-1,norm:41},
+  va:{name:'VA',full:'Vertebral',win:'Suboccipital',depth:70,dir:-1,norm:38},
+  ica:{name:'ICA',full:'ICA (extracranial)',win:'Submandibular',depth:50,dir:-1,norm:30}
+};
+// shape: normal, osc (oscillating), spikes (systolic spikes)
+const SCEN={
+  normal:{label:'Normal',mca:55,ica:30,pi:0.9,shape:'normal',global:1},
+  mild:{label:'Mild vasospasm',mca:140,ica:32,pi:0.8,shape:'normal',global:1},
+  severe:{label:'Severe vasospasm',mca:230,ica:30,pi:0.7,shape:'normal',global:1},
+  hyper:{label:'Hyperemia',mca:150,ica:65,pi:0.75,shape:'normal',global:2.2},
+  icp:{label:'Raised ICP',mca:42,ica:26,pi:1.7,shape:'normal',global:0.8},
+  osc:{label:'Oscillating flow',mca:8,ica:10,pi:3,shape:'osc',global:0.3},
+  spikes:{label:'Systolic spikes',mca:6,ica:8,pi:3,shape:'spikes',global:0.25}
+};
+const S={v:'mca',scen:'normal',mca:55,ica:30,pi:0.9,hr:75,ang:0,gain:0.85,scl:1,frozen:false,tool:'caliper',env:false,shape:'normal',global:1};
+
+// ---------- waveform model ----------
+function shapeNormal(t,T){
+  if(t<0.04)return 0;
+  let s;
+  if(t<0.12)s=Math.pow((t-0.04)/0.08,1.4);
+  else if(t<0.30)s=1-0.48*Math.pow((t-0.12)/0.18,0.85);
+  else s=0.52*Math.pow(clamp(1-(t-0.30)/Math.max(T-0.30,0.05),0,1),1.15);
+  s+=-0.07*g(t,0.30,0.014)+0.06*g(t,0.36,0.035);
+  return Math.max(s,0);
+}
+const MS_CACHE={};
+function meanShape(T){const k=T.toFixed(2);if(MS_CACHE[k])return MS_CACHE[k];let a=0;const n=400;for(let i=0;i<n;i++)a+=shapeNormal((i+.5)/n*T,T)/n;return MS_CACHE[k]=a}
+function vesselMFV(v){
+  if(v==='mca')return S.mca;
+  if(v==='ica')return S.ica;
+  return VESSELS[v].norm*S.global;
+}
+function velocity(v,t,T){
+  const mfv=vesselMFV(v);
+  if(S.shape==='osc'){const fwd=28*Math.pow(clamp(Math.sin(Math.PI*clamp((t-0.04)/0.22,0,1)),0,1),1.3);const rev=-24*g(t,0.36,0.07);return fwd+rev}
+  if(S.shape==='spikes'){return 22*Math.pow(clamp(Math.sin(Math.PI*clamp((t-0.05)/0.11,0,1)),0,1),2)}
+  const ms=meanShape(T);const amp=S.pi*mfv;const edv=mfv-amp*ms;
+  return edv+amp*shapeNormal(t,T);
+}
+function stats(v,T){
+  const n=300;let mx=-1e9,mn=1e9,sum=0;
+  for(let i=0;i<n;i++){const val=velocity(v,(i+.5)/n*T,T);mx=Math.max(mx,val);sum+=val/n}
+  const edv=velocity(v,T*0.985,T);mn=edv;
+  return {psv:mx,edv:mn,mfv:sum};
+}
+function ecg(p,T){const qt=.4*Math.sqrt(T);let v=g(p,T-.16,.025)*.15+g(p,qt-.09,.045)*.3;for(const q of[p,p-T])v+=g(q,-.025,.008)*-.12+g(q,0,.01)*1.1+g(q,.025,.009)*-.25;return v}
+
+// ---------- display ----------
+const colTime=new Float64Array(W).fill(NaN),colEnv=new Float32Array(W),colTrue=new Float32Array(W),colBeat=new Int32Array(W);
+let simT=0,sweepX=0,acc=0,beatStart=0,beatLen=60/S.hr,beatId=0,prevE=ECG0+40,last=performance.now();
+const col=sctx.createImageData(1,H);
+const pps=()=>W/(240/50);
+const range=()=>{const d=VESSELS[S.v].dir;const span=160*S.scl;return d>0?{top:span,bot:-span*0.3}:{top:span*0.3,bot:-span}};
+const yOfV=v=>{const r=range();return (r.top-v)/(r.top-r.bot)*HS};
+const vOfY=y=>{const r=range();return r.top-y/HS*(r.top-r.bot)};
+function lamI(v,e,sp){if(Math.abs(e)<1.2||v*e<=0)return 0;const r=Math.abs(v)/Math.abs(e);if(r>1)return .95*Math.exp(-(((r-1)/.04)**2));return .2+.8*Math.exp(-(((1-r)/sp)**2))}
+function reset(){sctx.fillStyle='#000';sctx.fillRect(0,0,W,H);colTime.fill(NaN);sweepX=0;acc=0;meas.pts=[];meas.trace=[]}
+function drawColumn(){
+  const dtc=1/pps();simT+=dtc;
+  if(simT>=beatStart+beatLen){beatStart+=beatLen;beatLen=60/S.hr;beatId++}
+  const p=simT-beatStart,T=beatLen,dir=VESSELS[S.v].dir;
+  const resp=1+0.03*Math.sin(2*Math.PI*simT/4.5);
+  const trueV=velocity(S.v,p,T)*resp*dir;const disp=trueV*Math.cos(S.ang*Math.PI/180);
+  colTime[sweepX]=simT;colEnv[sweepX]=disp;colTrue[sweepX]=trueV;colBeat[sweepX]=beatId;
+  const ej=disp*(1+(Math.random()-.5)*.04),r=range(),N2=r.top-r.bot,G=S.gain*1.3,d=col.data;
+  for(let y=0;y<HS;y++){const v=vOfY(y+.5);let I=lamI(v,ej,.45)+lamI(v+N2,ej,.45)+lamI(v-N2,ej,.45);
+    I*=(.35+Math.random());I=I*G+Math.random()*.06;if(Math.abs(v)<2.5)I*=.3;
+    const c=Math.pow(clamp(I,0,1),.85)*255,o=y*4;d[o]=c;d[o+1]=c*.97;d[o+2]=c*.9;d[o+3]=255}
+  for(let y=HS;y<H;y++){const o=y*4;d[o]=d[o+1]=d[o+2]=0;d[o+3]=255}
+  const ey=Math.round(ECG0+40-ecg(p,T)*36),a=Math.min(ey,prevE),b=Math.max(ey,prevE);
+  for(let y=a;y<=b;y++){if(y<HS||y>=H)continue;const o=y*4;d[o]=70;d[o+1]=220;d[o+2]=120}
+  prevE=ey;sctx.putImageData(col,sweepX,0);
+  sctx.fillStyle='#000';sctx.fillRect(sweepX+1,0,7,H);if(sweepX+8>=W)sctx.fillRect(0,0,sweepX+8-W,H);
+  for(let k=1;k<=7;k++)colTime[(sweepX+k)%W]=NaN;
+  sweepX=(sweepX+1)%W;
+}
+function drawOverlay(){
+  const c=octx,r=range(),V=VESSELS[S.v];c.clearRect(0,0,W,H);c.font='500 13px "IBM Plex Mono",monospace';
+  const y0=yOfV(0);c.strokeStyle='rgba(120,200,215,.7)';c.lineWidth=1;c.beginPath();c.moveTo(0,y0+.5);c.lineTo(W,y0+.5);c.stroke();
+  c.fillStyle='rgba(0,0,0,.55)';c.fillRect(W-58,0,58,HS);c.strokeStyle='#9FB4BC';c.fillStyle='#CFE0E6';c.textAlign='right';c.textBaseline='middle';
+  const step=S.scl>1.3?50:20,lab=S.scl>1.3?100:40;
+  for(let v=Math.ceil(r.bot/step)*step;v<=r.top;v+=step){const y=yOfV(v);if(y<24||y>HS-6)continue;const major=v%lab===0;c.beginPath();c.moveTo(W-58,y+.5);c.lineTo(W-58+(major?10:5),y+.5);c.stroke();if(major)c.fillText(String(v),W-6,y)}
+  c.fillText('cm/s',W-6,10);
+  c.fillStyle='rgba(0,0,0,.6)';c.fillRect(0,0,520,46);c.textAlign='left';c.textBaseline='top';c.fillStyle='#7FD3DE';c.fillText(`TCD  ${V.full}  ${V.win}`,10,8);
+  c.fillStyle='#9FB4BC';c.fillText(`Depth ${V.depth} mm   SV 10 mm   ${V.dir>0?'toward':'away'}   angle ${S.ang}°   2 MHz`,10,26);
+  c.fillStyle='#46DC78';c.fillText('II',10,HS+8);c.textAlign='right';c.fillText(`HR ${S.hr}`,W-66,HS+8);
+  if(S.frozen){c.textAlign='center';c.fillStyle='#F0A24B';c.font='600 15px "IBM Plex Mono",monospace';c.fillText('FROZEN',W/2,8);c.font='500 13px "IBM Plex Mono",monospace'}
+  if(S.env){c.strokeStyle='rgba(73,191,205,.95)';c.lineWidth=1.5;c.setLineDash([4,3]);c.beginPath();let pen=false;
+    for(let x=0;x<W;x++){if(isNaN(colTime[x])||(x>0&&Math.abs(colTime[x]-colTime[x-1])>.05)){pen=false;continue}const y=yOfV(colEnv[x]);if(!pen){c.moveTo(x,y);pen=true}else c.lineTo(x,y)}c.stroke();c.setLineDash([])}
+  c.strokeStyle='#F0A24B';c.fillStyle='#F0A24B';c.lineWidth=1.5;c.textAlign='left';c.textBaseline='bottom';
+  meas.pts.forEach((pt,i)=>{c.beginPath();c.moveTo(pt.x-8,pt.y);c.lineTo(pt.x+8,pt.y);c.moveTo(pt.x,pt.y-8);c.lineTo(pt.x,pt.y+8);c.stroke();c.fillText(`${i===0?'PSV':'EDV'}: ${Math.abs(vOfY(pt.y)).toFixed(0)} cm/s`,Math.min(pt.x+10,W-170),pt.y-4)});
+  if(meas.trace.length>1){c.beginPath();meas.trace.forEach((pt,i)=>i?c.lineTo(pt.x,pt.y):c.moveTo(pt.x,pt.y));c.stroke()}
+}
+
+// ---------- measurement ----------
+const meas={pts:[],trace:[],drawing:false};
+function toC(e){const b=ov.getBoundingClientRect();return {x:clamp((e.clientX-b.left)/b.width*W,0,W-1),y:clamp((e.clientY-b.top)/b.height*H,0,HS)}}
+ov.addEventListener('pointerdown',e=>{if(!S.frozen)return;const pt=toC(e);if(S.tool==='caliper'){if(meas.pts.length>=2)meas.pts=[];meas.pts.push(pt);renderMeas()}else{meas.trace=[pt];meas.drawing=true;ov.setPointerCapture(e.pointerId)}});
+ov.addEventListener('pointermove',e=>{if(meas.drawing)meas.trace.push(toC(e))});
+ov.addEventListener('pointerup',()=>{if(meas.drawing){meas.drawing=false;renderMeas()}});
+const row=(k,v)=>`<div class="row"><span class="k">${k}</span><b>${v}</b></div>`;
+const f1=x=>Number.isFinite(x)?x.toFixed(1):'n/a',f0=x=>Number.isFinite(x)?x.toFixed(0):'n/a',f2=x=>Number.isFinite(x)?x.toFixed(2):'n/a';
+function renderMeas(){const el=$('meas');
+  if(!S.frozen){el.innerHTML='<p class="meas-empty">Freeze the screen to measure.</p>';return}
+  if(S.tool==='caliper'){
+    if(!meas.pts.length){el.innerHTML='<p class="meas-empty">Tap the systolic peak (PSV), then end diastole (EDV). The page estimates MFV and PI from the two points.</p>';return}
+    const psv=Math.abs(vOfY(meas.pts[0].y));let h=row('PSV',`${f0(psv)} cm/s`);
+    if(meas.pts.length===2){const edv=Math.abs(vOfY(meas.pts[1].y));const mfv=(psv+2*edv)/3;h+=row('EDV',`${f0(edv)} cm/s`)+row('MFV estimate (PSV + 2·EDV)/3',`${f0(mfv)} cm/s`)+row('PI (Gosling)',f2((psv-edv)/mfv))+row('RI',f2((psv-edv)/psv));
+      if(S.v==='mca')h+=row('Lindegaard ratio (with set ICA)',f1(mfv/S.ica))}
+    el.innerHTML=`<div class="rows">${h}</div>`;return}
+  const dir=VESSELS[S.v].dir;let pts=meas.trace.map(p=>({t:colTime[Math.round(p.x)],v:vOfY(p.y)*dir,x:p.x})).filter(p=>Number.isFinite(p.t));pts.sort((a,b)=>a.t-b.t);
+  if(pts.length<4){el.innerHTML='<p class="meas-empty">Drag along the outer edge of one complete beat, from one upstroke to the next.</p>';return}
+  let area=0,pk=-1e9;for(let i=1;i<pts.length;i++){const dt=pts[i].t-pts[i-1].t;if(dt>.05)continue;area+=(pts[i].v+pts[i-1].v)/2*dt}pts.forEach(p=>pk=Math.max(pk,p.v));
+  const dur=pts[pts.length-1].t-pts[0].t,mfv=area/Math.max(dur,1e-3),edv=pts[pts.length-1].v;
+  let h=row('Traced duration',`${f0(dur*1000)} ms`)+row('PSV',`${f0(pk)} cm/s`)+row('EDV',`${f0(edv)} cm/s`)+row('MFV (time-averaged)',`${f0(mfv)} cm/s`)+row('PI',f2((pk-edv)/mfv));
+  if(S.v==='mca')h+=row('Lindegaard ratio',f1(mfv/S.ica));
+  el.innerHTML=`<div class="rows">${h}</div>`}
+
+// ---------- calculations ----------
+function renderCalc(){
+  const T=60/S.hr,cosA=Math.cos(S.ang*Math.PI/180),st=stats(S.v,T),ps=st.psv*cosA,ed=st.edv*cosA,mf=st.mfv*cosA;
+  const mcaS=stats('mca',T),icaS=stats('ica',T),lr=mcaS.mfv/icaS.mfv;
+  let h=row('Vessel',`${VESSELS[S.v].full}, ${VESSELS[S.v].depth} mm`)+row('PSV',`${f0(ps)} cm/s`)+row('EDV',`${f0(ed)} cm/s`)+row('MFV',`${f0(mf)} cm/s`);
+  if(S.shape==='normal'){h+=row('PI',f2((ps-ed)/mf))+row('RI',f2((ps-ed)/ps))}
+  const lrc=lr<3?'n':lr<=6?'m':'s';h+=row('Lindegaard ratio',`${f1(lr)} <span class="pill ${lrc}">${lr<3?'< 3':lr<=6?'3 to 6':'> 6'}</span>`);
+  $('calc').innerHTML=h;
+  let f='';
+  if(S.shape==='osc')f='Oscillating flow: forward systolic flow with reversed diastolic flow and near-zero net flow. This pattern indicates cerebral circulatory arrest. Confirm in both MCAs and the basilar artery, repeat, and follow your brain death protocol.';
+  else if(S.shape==='spikes')f='Small systolic spikes with no diastolic flow indicate cerebral circulatory arrest. Absent signal alone is not diagnostic, because it can reflect a poor window.';
+  else{
+    const m=mcaS.mfv;
+    if(m>=120&&lr>=3)f=`MCA MFV ${f0(m)} cm/s with Lindegaard ratio ${f1(lr)}: ${m>200||lr>6?'severe':'mild to moderate'} vasospasm. `;
+    else if(m>=120&&lr<3)f=`MCA MFV ${f0(m)} cm/s but Lindegaard ratio ${f1(lr)}: high flow from hyperemia rather than vessel narrowing. `;
+    else f='MCA velocity in the normal range. ';
+    if(S.pi>=1.2)f+=`PI ${f2(S.pi)} with low diastolic velocity suggests raised intracranial pressure or low cerebral perfusion pressure; check CO2, heart rate and cardiac output before attributing it to ICP. `;
+    if(S.ang>15)f+=`At ${S.ang}° the displayed velocities read ${f0((1-cosA)*100)}% low. TCD usually assumes 0°, so poor alignment underestimates vasospasm.`;
+  }
+  $('flag').textContent=f.trim();
+}
+
+function autoScale(){const T=60/S.hr;let mx=0,mn=0;for(let i=0;i<300;i++){const v=velocity(S.v,(i+.5)/300*T,T);mx=Math.max(mx,v);mn=Math.min(mn,v)}const d=VESSELS[S.v].dir;const fwd=mx,rev=-mn;const need=Math.max(fwd*1.15/160,rev*1.2/(160*0.3),0.3);S.scl=clamp(Math.ceil(need*20)/20,0.3,2.6)}
+// ---------- controls ----------
+const vt=$('vtabs');Object.entries(VESSELS).forEach(([k,v])=>{const b=document.createElement('button');b.className='tab';b.role='tab';b.dataset.v=k;b.innerHTML=`${v.name}<small>${v.depth}mm</small>`;b.onclick=()=>{S.v=k;autoScale();sync();reset();prefill()};vt.appendChild(b)});
+const pr=$('pre');Object.entries(SCEN).forEach(([k,s])=>{const b=document.createElement('button');b.dataset.s=k;b.textContent=s.label;b.onclick=()=>{Object.assign(S,{scen:k,mca:s.mca,ica:s.ica,pi:s.pi,shape:s.shape,global:s.global});autoScale();sync();reset();prefill()};pr.appendChild(b)});
+function bind(id,key,fmt,after){const el=$(id);el.addEventListener('input',()=>{S[key]=parseFloat(el.value);if(['mca','ica','pi'].includes(key)){S.shape='normal';S.scen='custom';S.global=1}sync();after&&after()})}
+bind('mca','mca');bind('ica','ica');bind('pi','pi');bind('hr','hr');bind('ang','ang');bind('gain','gain');bind('scl','scl',null,()=>{reset();prefill()});
+function sync(){
+  [...vt.children].forEach(b=>b.setAttribute('aria-selected',String(b.dataset.v===S.v)));
+  [...pr.children].forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.s===S.scen)));
+  const set=(id,v,t)=>{$(id).value=v;$(id+'-o').textContent=t};
+  set('mca',S.mca,`${f0(S.mca)} cm/s`);set('ica',S.ica,`${f0(S.ica)} cm/s`);set('pi',S.pi,S.shape==='normal'?f2(S.pi):'n/a');
+  set('hr',S.hr,`${S.hr} bpm`);set('ang',S.ang,`${S.ang}°`);set('gain',S.gain,`${Math.round(S.gain*100)}%`);set('scl',S.scl,`${S.scl.toFixed(2)}×`);
+  renderCalc();renderMeas();
+}
+function setFrozen(f){S.frozen=f;$('freeze').setAttribute('aria-pressed',String(f));$('freeze').textContent=f?'Unfreeze':'Freeze';['tool-caliper','tool-trace','clear'].forEach(id=>$(id).disabled=!f);if(!f){meas.pts=[];meas.trace=[]}renderMeas()}
+$('freeze').onclick=()=>setFrozen(!S.frozen);
+function setTool(t){S.tool=t;$('tool-caliper').setAttribute('aria-pressed',String(t==='caliper'));$('tool-trace').setAttribute('aria-pressed',String(t==='trace'));meas.pts=[];meas.trace=[];renderMeas()}
+$('tool-caliper').onclick=()=>setTool('caliper');$('tool-trace').onclick=()=>setTool('trace');
+$('clear').onclick=()=>{meas.pts=[];meas.trace=[];renderMeas()};
+$('env').onclick=()=>{S.env=!S.env;$('env').setAttribute('aria-pressed',String(S.env))};
+document.addEventListener('keydown',e=>{if(e.code==='Space'&&!/INPUT|SELECT|TEXTAREA|BUTTON/.test(document.activeElement.tagName)){e.preventDefault();setFrozen(!S.frozen)}});
+
+// ---------- loop ----------
+function prefill(){for(let i=0;i<W-40;i++)drawColumn()}
+function frame(ts){const dt=Math.min(.05,(ts-last)/1000);last=ts;if(!S.frozen){acc+=dt*pps();let n=0;while(acc>=1&&n<60){acc-=1;drawColumn();n++}}drawOverlay();requestAnimationFrame(frame)}
+autoScale();sync();reset();prefill();requestAnimationFrame(frame);
+
+// ---------- embed height ----------
+function sendH(){try{parent.postMessage({tcdLabHeight:Math.ceil(document.querySelector('.wrap').getBoundingClientRect().height)},'*')}catch(e){}}
+addEventListener('load',sendH);addEventListener('resize',sendH);try{new ResizeObserver(sendH).observe(document.querySelector('.wrap'))}catch(e){}
+})();
+</script>
+</body>
+</html>
