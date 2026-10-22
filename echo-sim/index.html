@@ -1,0 +1,739 @@
+<title>TTE &amp; TEE Simulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: echo cart console. Ultrasound screen dominates left, probe controls and view list right, 3D locator and teaching below. Same family as the pulmonarypocus.com Doppler Labs. */
+:root{
+  --bg:#EEF2F3; --surface:#FFFFFF; --sunk:#E3E9EB; --ink:#14212B; --muted:#5A6B76; --line:#CBD5D9;
+  --accent:#0A7484; --accent-ink:#FFFFFF; --amber:#A65A12; --warn:#B3261E; --ok:#2E7D4F;
+  --mon:#030506; --mon-ink:#D6E2E7; --mon-muted:#8EA3AD;
+  --font-display:"Barlow Condensed","Arial Narrow",system-ui,sans-serif;
+  --font-body:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+  --font-mono:"IBM Plex Mono",ui-monospace,"SFMono-Regular",Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0E1417; --surface:#162026; --sunk:#1D2A31; --ink:#E2EAEE; --muted:#93A5AF; --line:#2B3A42;
+  --accent:#49BFCD; --accent-ink:#06262B; --amber:#F0A24B; --warn:#FF8A80; --ok:#7CD39A; color-scheme:dark}
+*{box-sizing:border-box}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.5}
+.wrap{max-width:1360px;margin:0 auto;padding-block:20px 40px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));display:grid;gap:16px}
+header{display:flex;flex-wrap:wrap;align-items:flex-end;justify-content:space-between;gap:12px}
+h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spacing:.01em;margin:0;line-height:1;text-wrap:balance}
+.sub{color:var(--muted);margin:4px 0 0;font-size:.92rem;max-width:72ch}
+.mtabs{display:flex;gap:4px;background:var(--sunk);padding:4px;border-radius:8px}
+.mtab{font-family:var(--font-display);font-size:1.15rem;font-weight:600;letter-spacing:.04em;border:0;background:transparent;color:var(--muted);padding:6px 18px;border-radius:6px;cursor:pointer}
+.mtab[aria-selected="true"]{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.main{display:grid;grid-template-columns:minmax(0,1fr) 360px;gap:16px;align-items:start}
+@media (max-width:1040px){.main{grid-template-columns:minmax(0,1fr)}}
+.leftcol{display:grid;gap:16px;min-width:0}
+.monitor{background:var(--mon);border-radius:10px;padding:10px;border:1px solid var(--line);min-width:0;color:var(--mon-ink)}
+.screen{position:relative;width:100%;aspect-ratio:760/600;max-width:100%}
+.screen canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+#ov{touch-action:none}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:10px}
+.btn{font-family:var(--font-body);font-size:.88rem;font-weight:500;border:1px solid #33454E;background:#111A1F;color:#D6E2E7;padding:6px 12px;border-radius:6px;cursor:pointer}
+.btn[aria-pressed="true"]{background:#49BFCD;border-color:#49BFCD;color:#06262B}
+.btn.freeze[aria-pressed="true"]{background:#F0A24B;border-color:#F0A24B;color:#2A1600}
+.hint{color:var(--mon-muted);font-size:.8rem;flex:1 1 240px;min-width:0}
+.rack{display:grid;gap:12px;min-width:0}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
+.panel h2{font-family:var(--font-display);font-weight:600;font-size:1.05rem;letter-spacing:.08em;text-transform:uppercase;margin:0 0 10px;color:var(--muted)}
+.vgroup{font-family:var(--font-mono);font-size:.72rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);margin:8px 0 4px}
+.vgroup:first-child{margin-top:0}
+.views{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:4px}
+.views button{font-size:.8rem;text-align:left;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:5px 8px;border-radius:5px;cursor:pointer;line-height:1.25}
+.views button:hover{border-color:var(--accent)}
+.views button[aria-pressed="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+.ctl{display:grid;grid-template-columns:1fr auto;gap:2px 10px;align-items:center;margin-bottom:10px}
+.ctl:last-child{margin-bottom:0}
+.ctl label{font-size:.88rem;font-weight:500}
+.ctl output{font-family:var(--font-mono);font-size:.85rem;font-variant-numeric:tabular-nums;color:var(--accent)}
+.ctl input[type=range]{grid-column:1/-1;width:100%;accent-color:var(--accent)}
+.omni{display:flex;align-items:center;gap:6px;grid-column:1/-1}
+.omni input{flex:1;min-width:0}
+.mini{font-family:var(--font-mono);font-size:.8rem;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:3px 8px;border-radius:5px;cursor:pointer}
+button:focus-visible,input:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.lower{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(0,1fr);gap:16px}
+@media (max-width:820px){.lower{grid-template-columns:minmax(0,1fr)}}
+#loc{width:100%;aspect-ratio:1/1;max-width:100%;display:block;border-radius:8px;background:var(--sunk);touch-action:none;cursor:grab}
+.guide h3{font-family:var(--font-display);font-size:1.3rem;margin:0 0 4px}
+.guide p{margin:0 0 8px;max-width:72ch}
+.guide .how{font-family:var(--font-mono);font-size:.82rem;color:var(--muted);background:var(--sunk);padding:6px 10px;border-radius:6px;display:inline-block;margin-bottom:8px}
+.guide ul{margin:0;padding-left:18px;display:grid;gap:4px;max-width:72ch}
+.quiz-opts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px;margin:10px 0}
+.quiz-opts button{font-size:.86rem;text-align:left;border:1px solid var(--line);background:var(--sunk);color:var(--ink);padding:8px 10px;border-radius:6px;cursor:pointer}
+.quiz-opts button.right{border-color:var(--ok);background:color-mix(in srgb,var(--ok) 18%,var(--sunk))}
+.quiz-opts button.wrong{border-color:var(--warn);background:color-mix(in srgb,var(--warn) 14%,var(--sunk))}
+.primary{font-family:var(--font-body);font-size:.88rem;font-weight:600;border:0;background:var(--accent);color:var(--accent-ink);padding:8px 14px;border-radius:6px;cursor:pointer}
+.score{font-family:var(--font-mono);font-size:.85rem;color:var(--muted);margin-left:8px;letter-spacing:0;text-transform:none}
+.muted{color:var(--muted);font-size:.84rem;margin:6px 0 0}
+.err{color:var(--warn);padding:20px;font-size:.95rem}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+</style>
+
+<div class="wrap">
+  <header>
+    <div>
+      <h1>TTE &amp; TEE Simulator</h1>
+      <p class="sub">A beating 3D heart sliced in real time by the probe. Rotate the omniplane, advance, turn and flex the TEE probe, or move the TTE transducer, and watch the anatomy change.</p>
+    </div>
+    <div class="mtabs" role="tablist" aria-label="Modality">
+      <button class="mtab" role="tab" data-m="tee" aria-selected="true">TEE</button>
+      <button class="mtab" role="tab" data-m="tte" aria-selected="false">TTE</button>
+    </div>
+  </header>
+
+  <div class="main">
+    <div class="leftcol">
+      <div class="monitor">
+        <div class="screen">
+          <canvas id="gl" width="760" height="600" aria-label="Simulated echocardiography image"></canvas>
+          <canvas id="ov" width="760" height="600" aria-hidden="true"></canvas>
+        </div>
+        <div class="toolbar">
+          <button class="btn freeze" id="freeze" aria-pressed="false">Freeze</button>
+          <button class="btn" id="labels" aria-pressed="true">Labels</button>
+          <button class="btn" id="slow" aria-pressed="false">Slow motion</button>
+          <span class="hint" id="hint"></span>
+        </div>
+      </div>
+    </div>
+
+    <div class="rack">
+      <section class="panel">
+        <h2 id="ctl-h">TEE probe</h2>
+        <div id="ctl-tee">
+          <div class="ctl"><label for="omni">Omniplane</label><output id="omni-o"></output>
+            <div class="omni"><button class="mini" data-d="-5" aria-label="Rotate omniplane back 5 degrees">−5</button><input type="range" id="omni" min="0" max="180" step="1"><button class="mini" data-d="5" aria-label="Rotate omniplane forward 5 degrees">+5</button></div></div>
+          <div class="ctl"><label for="adv">Advance / withdraw</label><output id="adv-o"></output><input type="range" id="adv" min="-10" max="16" step="0.1"></div>
+          <div class="ctl"><label for="turn">Turn (left / right)</label><output id="turn-o"></output><input type="range" id="turn" min="-180" max="180" step="1"></div>
+          <div class="ctl"><label for="flex">Flex (retro / ante)</label><output id="flex-o"></output><input type="range" id="flex" min="-60" max="100" step="1"></div>
+          <div class="ctl"><label for="lflex">Lateral flex (right / left)</label><output id="lflex-o"></output><input type="range" id="lflex" min="-30" max="30" step="1"></div>
+        </div>
+        <div id="ctl-tte" hidden>
+          <div class="ctl"><label for="rot">Rotate</label><output id="rot-o"></output><input type="range" id="rot" min="-90" max="90" step="1"></div>
+          <div class="ctl"><label for="tilt">Tilt (fan)</label><output id="tilt-o"></output><input type="range" id="tilt" min="-40" max="40" step="1"></div>
+          <div class="ctl"><label for="rock">Rock</label><output id="rock-o"></output><input type="range" id="rock" min="-30" max="30" step="1"></div>
+        </div>
+        <div class="ctl"><label for="depth">Image depth</label><output id="depth-o"></output><input type="range" id="depth" min="6" max="22" step="0.5"></div>
+      </section>
+      <section class="panel">
+        <h2>Standard views</h2>
+        <div id="views"></div>
+      </section>
+      <section class="panel">
+        <h2>Probe in 3D</h2>
+        <canvas id="loc" width="600" height="600" aria-label="3D view of the heart, probe and imaging plane. Drag to rotate."></canvas>
+        <p class="muted">Drag to rotate. The green fan is the imaging plane.</p>
+      </section>
+    </div>
+  </div>
+  <div class="lower">
+        <section class="panel guide" id="guide"></section>
+        <section class="panel">
+          <h2>Name that view<span class="score" id="score"></span></h2>
+          <div id="quiz"><p class="muted" style="margin:0">Load a random standard view with labels hidden, then pick its name.</p></div>
+          <div style="margin-top:10px"><button class="primary" id="q-new">New view</button></div>
+        </section>
+  </div>
+</div>
+
+<script>
+(()=>{
+const $=id=>document.getElementById(id);
+/* ---------- vector helpers ---------- */
+const add=(a,b)=>[a[0]+b[0],a[1]+b[1],a[2]+b[2]],sub=(a,b)=>[a[0]-b[0],a[1]-b[1],a[2]-b[2]],sc=(a,s)=>[a[0]*s,a[1]*s,a[2]*s];
+const dot=(a,b)=>a[0]*b[0]+a[1]*b[1]+a[2]*b[2],len=a=>Math.hypot(a[0],a[1],a[2]),norm=a=>sc(a,1/(len(a)||1));
+const cross=(a,b)=>[a[1]*b[2]-a[2]*b[1],a[2]*b[0]-a[0]*b[2],a[0]*b[1]-a[1]*b[0]];
+const rotAx=(v,k,t)=>{const c=Math.cos(t),s=Math.sin(t);return add(add(sc(v,c),sc(cross(k,v),s)),sc(k,dot(k,v)*(1-c)))};
+const lerp=(a,b,t)=>a+(b-a)*t,clamp=(x,a,b)=>Math.max(a,Math.min(b,x)),D2R=Math.PI/180;
+const bez=(p0,p1,p2,t)=>add(add(sc(p0,(1-t)*(1-t)),sc(p1,2*t*(1-t))),sc(p2,t*t));
+
+/* ---------- anatomy (heart frame, cm). Y = LV long axis from mid-esophagus, X = patient left, Z = toward anterior/superior ---------- */
+const G={};
+G.V=[0,-0.375,0.927];           // patient superior
+G.Ant=[0,0.927,0.375];          // patient anterior
+G.LA=[0.5,1.75,0.0];G.LAr=[2.55,2.4,2.15];
+G.RA=[-2.35,2.55,-0.15];G.RAr=[2.0,2.3,2.0];
+G.sepP=[-0.7,2.5,0];G.sepN=norm([1,0.2,0]);G.fossa=[-0.75,2.4,-0.5];
+G.Cm=[0.65,4.4,-0.3];G.Rm=1.5;G.axM=[0,1,0];G.e1M=norm([-0.6,0,0.8]);
+G.Ct=[-3.25,4.6,0.3];G.Rt=1.05;G.axT=norm([-0.12,1,0]);G.e1T=[1,0,0];
+G.L130=norm([-0.643,0,0.766]);G.Ca=add(add(G.Cm,sc(G.L130,2.5)),[0,-0.3,0]);G.a=norm(add(sc([0,1,0],-0.42),sc(G.L130,0.906)));G.Ra=1.1;
+G.ot0=[-0.3,5.8,0.8];
+G.rv0=[-2.4,7.0,2.6];G.Cp=[0.3,4.6,5.2];G.pax=norm(sub(G.Cp,G.rv0));G.Rp=1.0;
+G.Bpa=add(G.Cp,sc(norm([0.3,-0.8,0.45]),3.2));G.RPA=[-4.8,-0.9,5.6];G.LPA=[4.2,0.0,6.8];
+G.root=add(G.Ca,sc(G.a,0.75));G.asc0=add(G.Ca,sc(G.a,1.3));G.Atop=add(G.Ca,sc(G.a,5.0));
+G.Dtop=[1.9,-4.8,7.8];G.archC=[-1.2,-1.4,10.0];G.ddir=norm([0.03,0.2,-0.98]);G.Dbot=add(G.Dtop,sc(G.ddir,22));
+G.arch=[];for(let i=0;i<=8;i++)G.arch.push(bez(G.Atop,G.archC,G.Dtop,i/8));
+G.svc=[[-3.1,2.4,1.4],[-5.6,0.2,7.0]];G.ivc=[[-2.4,3.4,-1.5],add([-2.4,3.4,-1.5],sc(G.V,-8))];
+G.cs=[[2.4,3.4,-1.5],[0.3,3.6,-2.0],[-2.1,3.2,-1.6]];
+G.laa=[[0.4,2.6,1.4],[0.8,3.4,2.8]];
+G.pvs=[[[1.8,0.6,1.0],[3.9,-0.3,1.8]],[[1.8,0.6,-0.9],[3.9,-0.3,-1.5]],[[-0.4,0.4,1.0],[-2.7,-0.6,1.6]],[[-0.4,0.4,-0.9],[-2.7,-0.6,-1.5]]];
+G.LVc=[0.8,0,-0.2];G.RVc=[-2.85,5.5,0.5];
+
+/* ---------- shader ---------- */
+const f=x=>(+x).toFixed(4),v3=a=>`vec3(${f(a[0])},${f(a[1])},${f(a[2])})`;
+const cap=(a,b,r)=>`sdCap(p,${v3(a)},${v3(b)},${f(r)})`;
+function archSDF(){let s='9.0';for(let i=0;i<8;i++)s=`min(${s},${cap(G.arch[i],G.arch[i+1],1.2)})`;return s}
+const FS=`precision highp float;
+uniform vec2 uRes;uniform vec3 uO,uB,uL;uniform float uDepth,uHalf,uTop,uBot,uMode,uTime;
+uniform float uLVs,uLVy,uRVs,uAtr,uMVo,uTVo,uAVo,uPVo,uGain;
+float sdEll(vec3 p,vec3 r){float k0=length(p/r);float k1=length(p/(r*r));return k0*(k0-1.0)/max(k1,1e-4);}
+float sdCap(vec3 p,vec3 a,vec3 b,float r){vec3 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.);return length(pa-ba*h)-r;}
+float hash(vec3 p){vec3 q=fract(p*0.1031);q+=dot(q,q.zyx+31.32);return fract((q.x+q.y)*q.z);}
+float noise(vec3 x){vec3 i=floor(x);vec3 f=fract(x);f=f*f*(3.0-2.0*f);
+ return mix(mix(mix(hash(i),hash(i+vec3(1,0,0)),f.x),mix(hash(i+vec3(0,1,0)),hash(i+vec3(1,1,0)),f.x),f.y),
+            mix(mix(hash(i+vec3(0,0,1)),hash(i+vec3(1,0,1)),f.x),mix(hash(i+vec3(0,1,1)),hash(i+vec3(1,1,1)),f.x),f.y),f.z);}
+float seg2(vec2 p,vec2 a,vec2 b){vec2 pa=p-a,ba=b-a;float h=clamp(dot(pa,ba)/dot(ba,ba),0.0,1.0);return length(pa-ba*h);}
+// AV leaflets: ruled surface hinged on the annulus with a curved, fluttering free edge. kind 0 mitral, 1 tricuspid
+float leaf(vec3 p,vec3 c,vec3 ax,vec3 e1,float R,float o,float kind){
+ vec3 q=p-c;float u=dot(q,ax);vec3 w=q-u*ax;float r=length(w);
+ if(r>R+2.5||abs(u)>3.0)return 9.0;
+ vec3 e2=cross(ax,e1);float phi=atan(dot(w,e2),dot(w,e1));
+ float L,psi;
+ if(kind<0.5){float fa=smoothstep(1.55,0.7,abs(phi));L=mix(1.3,2.05,fa);L*=1.0-0.4*exp(-pow((abs(phi)-1.45)/0.2,2.0));
+   float bt=R+0.3*cos(phi);float pc=acos(clamp(bt/L,0.0,1.0));psi=mix(pc,mix(1.2,1.4,fa),o);}
+ else{float m=mod(phi+3.14159,2.0944)-1.0472;L=1.45*(1.0-0.45*exp(-pow((abs(m)-1.0472)/0.18,2.0)));
+   float pc=acos(clamp(R/L,0.0,1.0));psi=mix(pc,1.3,o);}
+ // flutter: low-amplitude oscillation of the open leaflet plus a slow drift
+ float fl=o*(0.07*sin(uTime*31.0+phi*2.3+kind*1.7)+0.05*sin(uTime*7.3+phi*1.1));
+ psi+=fl*0.6;
+ vec2 P=vec2(R-r,u);vec2 d=vec2(cos(psi),sin(psi));vec2 n=vec2(-d.y,d.x);
+ float h=clamp(dot(P,d),0.0,L);float t=h/L;
+ float bend=(0.12*o+0.04)*t*t+fl*0.5*t*t*t; // leaflet belly curvature, tip whips more
+ float th=0.032+0.022*t;                     // thin hinge, slightly thicker tip
+ return length(P-(d*h+n*bend*L))-th;}
+// semilunar valve: three cusps. Closed: free edges meet on three radial lines (Mercedes). Open: triangular orifice.
+float cusps(vec3 p,vec3 c,vec3 ax,vec3 e1,float R,float o){
+ vec3 q=p-c;float u=dot(q,ax);vec3 w=q-u*ax;float r=length(w);
+ if(r>R+0.6||u<-0.9||u>1.9)return 9.0;
+ vec3 e2=cross(ax,e1);float phi=atan(dot(w,e2),dot(w,e1));
+ float m=mod(phi-0.5236,2.0944)-1.0472;              // 0 at cusp center, ±1.047 at commissures
+ float fl=o*0.05*sin(uTime*27.0+phi*3.0);
+ float rOpen=min(R*0.96,R*(0.6+fl)/cos(m));         // straight chord between commissures
+ float re=mix(0.18,rOpen,o);float ue=mix(-0.02,1.05,o);
+ vec2 H=vec2(R,0.0),E=vec2(re,ue);
+ vec2 M=mix(H,E,0.5)+vec2(0.0,-0.28*(1.0-o))+vec2(0.12*o,0.0);
+ vec2 P=vec2(r,u);
+ float d=min(seg2(P,H,M),seg2(P,M,E))-mix(0.012,0.03,o);
+ // coaptation walls along the three commissural radii when closed
+ float cl=1.0-smoothstep(0.15,0.45,o);
+ if(cl>0.0){
+   for(int k=0;k<3;k++){float pk=0.5236+float(k)*2.0944;float dp=phi-pk;
+     float cr=abs(r*sin(dp));
+     if(cos(dp)>0.0){float dw=max(max(cr-0.024,r-R+0.02),max(-u+0.04,u-0.34));d=min(d,dw+0.25*(1.0-cl));}}
+ }
+ return d;}
+float scene(vec3 p,float rr){
+ // LV
+ float yap=uLVy;float rx=2.2*uLVs;
+ float dLVc=sdEll(p-vec3(0.8,5.2,-0.2),vec3(rx,yap-5.2,rx));dLVc=max(dLVc,4.25-p.y);
+ float rxo=sqrt(rx*rx+5.4);
+ float dLVo=sdEll(p-vec3(0.8,5.0,-0.2),vec3(rxo,yap+0.75-5.0,rxo));dLVo=max(dLVo,4.0-p.y);
+ float dOT=${cap(G.ot0,G.Ca,0.95)};float sOT=dot(p-${v3(G.Ca)},${v3(G.a)});
+ float dLVb=min(dLVc,max(dOT,sOT-0.45));
+ float dMF=max(length(p.xz-vec2(${f(G.Cm[0])},${f(G.Cm[2])}))-${f(G.Rm)},abs(p.y-4.1)-0.5);
+ // papillary muscles (tissue inside LV)
+ float crad=rx*sqrt(max(0.0,1.0-pow((7.6-5.2)/(yap-5.2),2.0)));
+ float dPM=min(sdEll(p-vec3(0.8+0.62*crad,7.7,-0.2+0.5*crad),vec3(0.5,1.25,0.5)),sdEll(p-vec3(0.8-0.1*crad,7.7,-0.2-0.78*crad),vec3(0.5,1.25,0.5)));
+ // RV
+ float dRVc=sdEll(p-${v3(G.RVc)},vec3(1.95*uRVs,5.0,2.5));dRVc=max(dRVc,4.6-p.y);
+ float dRO=${cap(G.rv0,G.Cp,1.15)};float sPV=dot(p-${v3(G.Cp)},${v3(G.pax)});
+ dRVc=min(dRVc,max(dRO,sPV-0.45));dRVc=max(dRVc,-dLVo);
+ float dRVo=min(sdEll(p-${v3(G.RVc)},vec3(1.95*uRVs+0.45,5.45,2.95)),${cap(G.rv0,G.Cp,1.55)});dRVo=max(dRVo,4.3-p.y);
+ float dTF=max(length((p-${v3(G.Ct)}).xz)-${f(G.Rt)},abs(p.y-4.35)-0.55);
+ // atria
+ float s=dot(p-${v3(G.sepP)},${v3(G.sepN)});
+ vec3 fq=p-${v3(G.fossa)};fq-=dot(fq,${v3(G.sepN)})*${v3(G.sepN)};
+ float sh=mix(0.03,0.13,smoothstep(0.5,0.8,length(fq)));
+ float dLA=sdEll(p-${v3(G.LA)},${v3(G.LAr)}*uAtr);
+ float dLAA=${cap(G.laa[0],G.laa[1],0.55)};
+ float dPVn=min(min(${cap(G.pvs[0][0],G.pvs[0][1],0.55)},${cap(G.pvs[1][0],G.pvs[1][1],0.55)}),min(${cap(G.pvs[2][0],G.pvs[2][1],0.55)},${cap(G.pvs[3][0],G.pvs[3][1],0.55)}));
+ float dLAb=max(min(dLA,min(dLAA,dPVn)),sh-s);
+ float dRA=sdEll(p-${v3(G.RA)},${v3(G.RAr)}*uAtr);
+ float dVC=min(${cap(G.svc[0],G.svc[1],0.8)},${cap(G.ivc[0],G.ivc[1],1.05)});
+ float dCS=min(${cap(G.cs[0],G.cs[1],0.42)},${cap(G.cs[1],G.cs[2],0.45)});
+ float dRAb=max(min(dRA,dVC),s+sh);dRAb=min(dRAb,dCS);
+ // great arteries
+ float dRoot=min(length(p-${v3(G.root)})-1.42,${cap(G.asc0,G.Atop,1.15)});
+ float dArch=min(${archSDF()},${cap(G.Dtop,G.Dbot,1.15)});
+ float dAo=min(dRoot,dArch);
+ float dAob=min(max(dRoot,-sOT-0.45),dArch);
+ float dMPA=${cap(G.Cp,G.Bpa,1.2)};float dBr=min(${cap(G.Bpa,G.RPA,0.85)},${cap(G.Bpa,G.LPA,0.85)});
+ float dPA=min(dMPA,dBr);
+ float dPAb=min(max(dMPA,-sPV-0.45),dBr);
+ // blood and tissue
+ float blood=min(min(dLVb,dMF),min(dRVc,dTF));
+ blood=min(blood,min(dLAb,dRAb));blood=min(blood,min(dAob,dPAb));
+ float dRVw=max(dRVo,-dLVo);
+ float tissue=min(dLVo,dRVw);
+ tissue=min(tissue,min(dLA-0.22,dRA-0.22));
+ tissue=min(tissue,min(dLAA,dPVn)-0.15);tissue=min(tissue,dVC-0.15);tissue=min(tissue,dCS-0.12);
+ tissue=min(tissue,dAo-0.22);tissue=min(tissue,dPA-0.16);tissue=min(tissue,dOT-0.45);
+ float env=min(min(dLVo,dRVo),min(dLA-0.25,dRA-0.25));env=min(env,length(p-${v3(G.root)})-1.65);
+ // valves
+ float dv=leaf(p,${v3(G.Cm)},${v3(G.axM)},${v3(G.e1M)},${f(G.Rm)},uMVo,0.0);
+ dv=min(dv,leaf(p,${v3(G.Ct)},${v3(G.axT)},${v3(G.e1T)},${f(G.Rt)},uTVo,1.0));
+ dv=min(dv,cusps(p,${v3(G.Ca)},${v3(G.a)},${v3(norm(cross(G.a,[1,0,0])))},${f(G.Ra)},uAVo));
+ dv=min(dv,cusps(p,${v3(G.Cp)},${v3(G.pax)},${v3(norm(cross(G.pax,[0,1,0])))},${f(G.Rp)},uPVo));
+ // compose
+ float I=0.13+0.05*noise(p*0.6);
+ if(uMode>0.5&&rr<1.8){I=mix(0.42,0.16,smoothstep(0.1,1.8,rr))*(0.75+0.5*noise(vec3(p.x*0.4,rr*6.0,p.z*0.4)));} // chest wall
+ if(uMode<0.5&&rr<0.5)I=mix(0.38,I,smoothstep(0.2,0.5,rr)); // esophageal wall
+ float band=smoothstep(0.06,0.16,env)*smoothstep(0.42,0.22,env);
+ I=mix(I,0.58,band);
+ float myo=smoothstep(0.12,-0.12,tissue);
+ I=mix(I,0.33+0.06*noise(p*1.7),myo);
+ I=mix(I,0.36,smoothstep(0.12,-0.1,dPM));
+ float bl=smoothstep(0.1,-0.14,blood)*(1.0-smoothstep(0.1,-0.1,dPM));
+ I=mix(I,0.018,bl);
+ float edge=smoothstep(0.22,0.0,abs(blood+0.05))*(1.0-bl);I+=0.07*edge;
+ I=mix(I,0.82,smoothstep(0.075,-0.02,dv));
+ return I;}
+void main(){
+ float ppc=(uRes.y-uTop-uBot)/uDepth;
+ vec2 d=vec2(gl_FragCoord.x-uRes.x*0.5,(uRes.y-uTop)-gl_FragCoord.y)/ppc;
+ float r=length(d);float al=atan(d.x,max(d.y,1e-4));
+ if(d.y<0.0||r>uDepth||abs(al)>uHalf){gl_FragColor=vec4(0.0,0.0,0.0,1.0);return;}
+ vec3 dir=cos(al)*uB+sin(al)*uL;vec3 p=uO+r*dir;
+ vec3 lat=normalize(-sin(al)*uB+cos(al)*uL);vec3 Nn=normalize(cross(uB,uL));
+ float bw=0.045+0.008*r; // beam width grows with depth
+ float I=0.28*scene(p,r)+0.21*(scene(p+lat*bw*0.5,r)+scene(p-lat*bw*0.5,r))+0.15*(scene(p+lat*bw,r)+scene(p-lat*bw,r));
+ // speckle: fine axially, stretched laterally, anchored to tissue
+ vec3 Lw=normalize(uL-dot(uL,uB)*uB);float ax=dot(p,uB),lx=dot(p,Lw),nz=dot(p,Nn);
+ vec3 sq=vec3(ax*9.0+lx*1.3,lx*3.4-ax*0.7,nz*3.4+uTime*0.12);
+ float sp=noise(sq)*0.6+noise(sq*vec3(1.7,1.9,1.9)+vec3(13.1,7.3,2.9))*0.4;
+ float tis=smoothstep(0.03,0.12,I);
+ I*=mix(1.0,0.45+1.1*sp,tis*0.85);
+ I+=0.012*noise(vec3(ax*9.0,lx*3.0,uTime*2.0)); // faint blood haze
+ I*=uGain*(0.96+0.01*r);
+ I=pow(clamp(I,0.0,1.0),0.92);
+ I*=smoothstep(uHalf,uHalf-0.05,abs(al));
+ I=clamp(I,0.0,1.0);
+ gl_FragColor=vec4(I*0.98,I*0.99,I,1.0);}`;
+const VS=`attribute vec2 a;void main(){gl_Position=vec4(a,0.0,1.0);}`;
+
+/* ---------- GL setup ---------- */
+const glc=$('gl'),gl=glc.getContext('webgl',{antialias:false,preserveDrawingBuffer:true});
+let prog,U={};
+function initGL(){
+  if(!gl)throw new Error('WebGL unavailable');
+  const mk=(t,s)=>{const h=gl.createShader(t);gl.shaderSource(h,s);gl.compileShader(h);if(!gl.getShaderParameter(h,gl.COMPILE_STATUS))throw new Error(gl.getShaderInfoLog(h));return h};
+  prog=gl.createProgram();gl.attachShader(prog,mk(gl.VERTEX_SHADER,VS));gl.attachShader(prog,mk(gl.FRAGMENT_SHADER,FS));gl.linkProgram(prog);
+  if(!gl.getProgramParameter(prog,gl.LINK_STATUS))throw new Error(gl.getProgramInfoLog(prog));
+  gl.useProgram(prog);
+  const b=gl.createBuffer();gl.bindBuffer(gl.ARRAY_BUFFER,b);gl.bufferData(gl.ARRAY_BUFFER,new Float32Array([-1,-1,1,-1,-1,1,1,1]),gl.STATIC_DRAW);
+  const loc=gl.getAttribLocation(prog,'a');gl.enableVertexAttribArray(loc);gl.vertexAttribPointer(loc,2,gl.FLOAT,false,0,0);
+  ['uRes','uO','uB','uL','uDepth','uHalf','uTop','uBot','uMode','uTime','uLVs','uLVy','uRVs','uAtr','uMVo','uTVo','uAVo','uPVo','uGain'].forEach(n=>U[n]=gl.getUniformLocation(prog,n));
+}
+
+/* ---------- TEE probe mechanics ---------- */
+const PATH=[[-10,[0,-5.05,9.27]],[0,[0,-1.3,0]],[6,[0.2,1.25,-5.56]],[9,[1.4,4.5,-6.5]],[12,[2.6,7.0,-6.2]],[15,[3.2,9.6,-5.8]],[16,[3.35,10.45,-5.65]]];
+function pathPt(s){
+  s=clamp(s,-10,16);let i=0;while(i<PATH.length-2&&s>PATH[i+1][0])i++;
+  const P=k=>PATH[clamp(k,0,PATH.length-1)][1];
+  const s0=PATH[i][0],s1=PATH[i+1][0],t=(s-s0)/(s1-s0);
+  const p0=P(i-1),p1=P(i),p2=P(i+1),p3=P(i+2);
+  const cr=k=>0.5*((2*p1[k])+(-p0[k]+p2[k])*t+(2*p0[k]-5*p1[k]+4*p2[k]-p3[k])*t*t+(-p0[k]+3*p1[k]-3*p2[k]+p3[k])*t*t*t);
+  return [cr(0),cr(1),cr(2)];
+}
+const T0=sc(G.V,-1);
+function baseFrame(s){
+  const p=pathPt(s),T=norm(sub(pathPt(s+0.25),pathPt(s-0.25)));
+  let B0=G.Ant,X0=[1,0,0];
+  const ax=cross(T0,T),sn=len(ax);
+  if(sn>1e-4){const ang=Math.atan2(sn,dot(T0,T))*0.4,k=norm(ax);B0=rotAx(B0,k,ang);X0=rotAx(X0,k,ang)}
+  const U0=norm(cross(X0,B0));// shaft-up, perpendicular to face
+  return {p,B0,X0,U0};
+}
+function teePlane(P){
+  const F=baseFrame(P.adv),g=P.turn*D2R,ph=P.flex*D2R,ps=P.lflex*D2R,th=P.omni*D2R;
+  let B=add(sc(F.B0,Math.cos(g)),sc(F.X0,Math.sin(g))),X=add(sc(F.X0,Math.cos(g)),sc(F.B0,-Math.sin(g))),Uu=F.U0;
+  const B1=add(sc(B,Math.cos(ph)),sc(Uu,Math.sin(ph))),U1=add(sc(Uu,Math.cos(ph)),sc(B,-Math.sin(ph)));
+  const B2=add(sc(B1,Math.cos(ps)),sc(X,Math.sin(ps))),X2=add(sc(X,Math.cos(ps)),sc(B1,-Math.sin(ps)));
+  const L=norm(add(sc(X2,Math.cos(th)),sc(U1,Math.sin(th))));
+  return {O:add(F.p,sc(B2,0.15)),B:norm(B2),L,X:X2,U:U1};
+}
+function aimTEE(s,target,omni,opt={}){
+  const F=baseFrame(s),B=norm(sub(target,F.p));
+  const flex=Math.asin(clamp(dot(B,F.U0),-1,1))/D2R;
+  const turn=Math.atan2(dot(B,F.X0),dot(B,F.B0))/D2R;
+  let th=omni;
+  if(opt.normal||opt.hint){
+    const pl=teePlane({adv:s,turn,flex,lflex:0,omni:0});
+    let L=opt.normal?norm(cross(opt.normal,pl.B)):norm(sub(opt.hint,sc(pl.B,dot(opt.hint,pl.B))));
+    th=Math.atan2(dot(L,pl.U),dot(L,pl.X))/D2R;if(th<-30)th+=180;else if(th<0)th=0;if(th>210)th-=180;else if(th>180)th=180;
+  }
+  return {adv:s,turn:Math.round(turn),flex:Math.round(flex),lflex:0,omni:Math.round(th)};
+}
+/* ---------- TTE transducer ---------- */
+function aimTTE(O,target,hint){const B=norm(sub(target,O));const L=norm(sub(hint,sc(B,dot(hint,B))));return {O,B,L}}
+function ttePlane(base,P){
+  let {O,B,L}=base;let N=norm(cross(B,L));
+  const r=P.rot*D2R;L=add(sc(L,Math.cos(r)),sc(N,Math.sin(r)));N=norm(cross(B,L));
+  const t=P.tilt*D2R;B=add(sc(B,Math.cos(t)),sc(N,Math.sin(t)));N=norm(cross(B,L));
+  const k=P.rock*D2R;const B2=add(sc(B,Math.cos(k)),sc(L,Math.sin(k)));L=add(sc(L,Math.cos(k)),sc(B,-Math.sin(k)));
+  return {O,B:norm(B2),L:norm(L)};
+}
+
+/* ---------- views ---------- */
+const avg=(...p)=>sc(p.reduce((a,b)=>add(a,b),[0,0,0]),1/p.length);
+const LVmid=[0.8,7.2,-0.2],L130=G.L130,Npsax=norm([0.766,0,0.643]);
+const archMid=G.arch[4],ascMid=add(G.Ca,sc(G.a,3.4)),descME=add(G.Dtop,sc(G.ddir,G.Dtop[2]/0.98));
+const TEEV=[
+ {g:'Mid-esophageal',id:'me5c',n:'ME 5-chamber',p:()=>aimTEE(-0.7,[-0.6,5.4,1.0],0,{hint:[1,0,0]}),d:16,
+  see:'LVOT and aortic valve between the four chambers. Withdraw slightly or anteflex from the 4-chamber view.'},
+ {g:'Mid-esophageal',id:'me4c',n:'ME 4-chamber',p:()=>aimTEE(0,[0.1,10.6,-0.25],0,{hint:[1,0,0]}),d:16,
+  see:'LA and RA in the near field, LV on the right, RV on the left, mitral and tricuspid valves. Slight retroflexion keeps the apex from foreshortening.'},
+ {g:'Mid-esophageal',id:'mecom',n:'ME mitral commissural',p:()=>aimTEE(0,[0.8,10.6,-0.25],62),d:15,
+  see:'The coaptation line seen end-on: P3 on the left, A2 in the middle, P1 on the right. Both papillary muscles may appear.'},
+ {g:'Mid-esophageal',id:'me2c',n:'ME 2-chamber',p:()=>aimTEE(0,[0.8,10.6,-0.25],90),d:16,
+  see:'LA, LV and LAA. Inferior wall on the left, anterior wall on the right, coronary sinus in cross section near the inferior annulus.'},
+ {g:'Mid-esophageal',id:'melax',n:'ME long axis',p:()=>aimTEE(0,[-0.2,8.0,0.3],130,{hint:L130}),d:16,
+  see:'LA, LV, LVOT, aortic valve and proximal ascending aorta on the right. Anterior mitral leaflet in continuity with the aortic root.'},
+ {g:'Mid-esophageal',id:'meavlax',n:'ME AV long axis',p:()=>aimTEE(-1.2,G.Ca,125,{hint:G.a}),d:11,
+  see:'LVOT, aortic valve, sinuses, sinotubular junction and proximal ascending aorta. Measure the LVOT and annulus here.'},
+ {g:'Mid-esophageal',id:'meavsax',n:'ME AV short axis',p:()=>aimTEE(-1.4,add(G.Ca,sc(G.a,0.15)),35,{normal:G.a}),d:11,
+  see:'Three cusps: noncoronary next to the IAS, right coronary anterior, left coronary toward the LA appendage. Closed cusps form the Mercedes sign.'},
+ {g:'Mid-esophageal',id:'merv',n:'ME RV inflow-outflow',p:()=>aimTEE(-1.0,[-1.4,5.0,2.6],70,{normal:norm(cross([-1.4,0.2,1],[1,0,0.2]))}),d:14,
+  see:'RA, tricuspid valve, RV, RVOT and pulmonic valve wrapping around the aortic valve in the center.'},
+ {g:'Mid-esophageal',id:'mebic',n:'ME bicaval',p:()=>aimTEE(-1.0,[-3.0,2.6,0.2],100,{hint:G.V}),d:12,
+  see:'Turn right toward the RA. SVC on the right, IVC on the left, interatrial septum and fossa ovalis in the middle.'},
+ {g:'Mid-esophageal',id:'meascsax',n:'ME asc aorta short axis',p:()=>aimTEE(-5.0,add(G.Ca,sc(G.a,4.0)),25,{normal:G.a}),d:11,
+  see:'Ascending aorta in cross section with the main and right pulmonary artery wrapping behind it.'},
+ {g:'Mid-esophageal',id:'measclax',n:'ME asc aorta long axis',p:()=>aimTEE(-5.0,add(G.Ca,sc(G.a,4.0)),110,{hint:G.a}),d:11,
+  see:'Ascending aorta in long axis with the right pulmonary artery crossing behind it in short axis.'},
+ {g:'Upper esophageal',id:'uearch',n:'UE aortic arch long axis',p:()=>aimTEE(-9.0,G.arch[6],0,{hint:sub(G.arch[7],G.arch[4])}),d:10,
+  see:'Withdraw and turn left. The distal arch runs horizontally across the near field.'},
+ {g:'Upper esophageal',id:'uearchsax',n:'UE aortic arch short axis',p:()=>aimTEE(-9.0,G.arch[6],90),d:10,
+  see:'Arch in cross section. The main pulmonary artery and pulmonic valve can appear in the far field.'},
+ {g:'Upper esophageal',id:'descsax',n:'Desc aorta short axis',p:()=>aimTEE(0,descME,0),d:7,
+  see:'Turn left about 120 degrees from the 4-chamber view. Round descending aorta in the near field. Look for plaque, dissection flap and left pleural effusion.'},
+ {g:'Upper esophageal',id:'desclax',n:'Desc aorta long axis',p:()=>aimTEE(0,descME,90),d:7,
+  see:'Rotate to 90 degrees for the tubular long axis of the descending aorta.'},
+ {g:'Transgastric',id:'tgbas',n:'TG basal short axis',p:()=>aimTEE(11,[0.65,5.2,-0.3],0,{hint:[1,0,0]}),d:10,
+  see:'Mitral valve en face as a fish mouth: anterior leaflet on the left, posterior on the right in this simulator. Withdraw slightly or anteflex more from the mid view.'},
+ {g:'Transgastric',id:'tgmid',n:'TG mid short axis',p:()=>aimTEE(12,LVmid,0,{hint:[1,0,0]}),d:12,
+  see:'The key monitoring view: LV donut with both papillary muscles, inferior wall in the near field, RV on the left. All three coronary territories.'},
+ {g:'Transgastric',id:'tgapx',n:'TG apical short axis',p:()=>aimTEE(13.5,[0.3,10.4,-0.2],0,{hint:[1,0,0]}),d:11,
+  see:'Advance further for the apical segments. The cavity is small and the papillary muscles disappear.'},
+ {g:'Transgastric',id:'tg2c',n:'TG 2-chamber',p:()=>aimTEE(12,LVmid,90),d:12,
+  see:'Inferior wall in the near field, anterior wall far. Chordae and papillary muscles in long axis.'},
+ {g:'Transgastric',id:'tglax',n:'TG long axis',p:()=>aimTEE(12,[0.6,6.6,-0.3],120,{normal:norm(cross([0,1,0],L130))}),d:14,
+  see:'LVOT and aortic valve on the right in the far field. Doppler beam is parallel to LVOT flow here.'},
+ {g:'Transgastric',id:'tgrv',n:'TG RV inflow',p:()=>aimTEE(12,[-2.8,6.4,0.4],105),d:12,
+  see:'Turn right from the 2-chamber view. RA, tricuspid valve and RV with chordae.'},
+ {g:'Transgastric',id:'dtg',n:'Deep TG 5-chamber',p:()=>aimTEE(15.5,G.Ca,0,{hint:[1,0,0]}),d:16,
+  see:'Advance deep and anteflex hard. LV apex near field, LVOT and aortic valve in the far field: best alignment for LVOT and AV Doppler.'}
+];
+const OPAV=add([-0.2,5.6,0.4],sc(norm(add(sc([0,1,0],0.537),sc(G.L130,0.843))),9.5)),OPAR=add([-0.2,6.0,0.4],sc(norm(add(sc([0,1,0],0.12),G.L130)),9.5)),OAP=[0.35,14.8,-0.25],OSC=[-5.5,12.5,0.3],OSSN=[-1.2,-2.0,13.8];
+const TTEV=[
+ {g:'Parasternal',id:'plax',n:'Parasternal long axis',b:()=>aimTTE(OPAR,[-0.2,5.6,0.4],[0,-1,0]),d:16,
+  see:'RV near field, septum and posterior wall, mitral and aortic valves, LA behind the aortic root, descending aorta behind the LA.'},
+ {g:'Parasternal',id:'rvin',n:'RV inflow',b:()=>aimTTE(OPAR,[-3.0,4.6,0.0],[0,-1,0]),d:15,
+  see:'Tilt toward the right hip from PLAX. RA, tricuspid valve and RV; coronary sinus and IVC may enter the RA.'},
+ {g:'Parasternal',id:'rvout',n:'RV outflow',b:()=>aimTTE(OPAR,avg(G.Cp,G.rv0),sub(G.Bpa,G.rv0)),d:14,
+  see:'Tilt anteriorly toward the left shoulder from PLAX. RVOT on the left, pulmonic valve in the middle, main PA running to the right toward the bifurcation. Good for PW in the RVOT, CW across the pulmonic valve and PA acceleration time.'},
+ {g:'Parasternal',id:'psaxav',n:'PSAX aortic valve',b:()=>{const O=OPAV,B=norm(sub(add(G.Ca,sc(G.a,0.2)),O));return {O,B,L:norm(cross(G.a,B))}},d:14,
+  see:'Rotate 90 degrees clockwise from PLAX and tilt up. Aortic valve in the center, RA, TV, RVOT and pulmonic valve wrap around it.'},
+ {g:'Parasternal',id:'psaxmv',n:'PSAX mitral valve',b:()=>aimTTE(OPAR,[0.65,5.7,-0.3],Npsax),d:14,
+  see:'Fish-mouth mitral valve. Planimetry of mitral stenosis is done here.'},
+ {g:'Parasternal',id:'psaxpm',n:'PSAX papillary',b:()=>aimTTE(OPAR,[0.8,7.6,-0.2],Npsax),d:14,
+  see:'Round LV with both papillary muscles. Assess regional wall motion and septal shape (D sign with RV overload).'},
+ {g:'Parasternal',id:'psaxap',n:'PSAX apex',b:()=>aimTTE(OPAR,[0.8,10.3,-0.2],Npsax),d:14,
+  see:'Tilt toward the apex. Small cavity, apical segments only.'},
+ {g:'Apical',id:'a4c',n:'Apical 4-chamber',b:()=>aimTTE(OAP,[-1.1,3.2,-0.1],[1,0,0]),d:18,
+  see:'Apex at the top, LV on the right, RV on the left, atria in the far field. RV should be less than two thirds of the LV size.'},
+ {g:'Apical',id:'a5c',n:'Apical 5-chamber',b:()=>aimTTE(OAP,[-0.9,4.0,1.3],[1,0,0]),d:18,
+  see:'Tilt anteriorly from A4C to open the LVOT and aortic valve. Place PW in the LVOT for VTI.'},
+ {g:'Apical',id:'a2c',n:'Apical 2-chamber',b:()=>aimTTE(OAP,[0.2,3.4,-0.3],[0,0,1]),d:18,
+  see:'Rotate counterclockwise about 60 degrees from A4C. Inferior wall left, anterior wall right, no RV.'},
+ {g:'Apical',id:'a3c',n:'Apical 3-chamber',b:()=>aimTTE(OAP,[-0.4,4.0,0.5],L130),d:18,
+  see:'Rotate further: apical long axis with LVOT and aortic valve on the right.'},
+ {g:'Subcostal',id:'sc4c',n:'Subcostal 4-chamber',b:()=>aimTTE(OSC,[0.0,6.0,0.0],[0.76,0.65,0.0]),d:18,
+  see:'Liver in the near field, RV free wall closest to the transducer. Best for pericardial effusion and RV free wall thickness.'},
+ {g:'Subcostal',id:'scivc',n:'Subcostal IVC',b:()=>aimTTE([-4.0,12.5,-3.5],[-2.4,3.6,-2.0],G.V),d:20,
+  see:'Rotate to the long axis of the IVC entering the RA. Measure diameter 1 to 2 cm from the RA junction and watch the sniff response.'},
+ {g:'Suprasternal',id:'ssn',n:'Suprasternal arch',b:()=>aimTTE(OSSN,archMid,sub(G.Dtop,G.Atop)),d:18,
+  see:'Ascending aorta on the left, arch and descending aorta on the right, right pulmonary artery in cross section under the arch.'}
+];
+
+/* ---------- state ---------- */
+const S={mode:'tee',P:{adv:0,turn:0,flex:-24,lflex:0,omni:0},T:{rot:0,tilt:0,rock:0},tgt:null,view:{tee:'me4c',tte:'a4c'},depth:{tee:16,tte:18},
+  base:null,frozen:false,labels:true,slow:false,quiz:null};
+let tPhys=0,lastNow=performance.now(),cyc=0;
+const HR=72;
+
+/* ---------- cardiac cycle ---------- */
+const sm=(a,b,x)=>{const t=clamp((x-a)/(b-a),0,1);return t*t*(3-2*t)};
+function cycle(ph){
+  const sys=sm(0.05,0.36,ph)*(1-sm(0.44,0.62,ph));
+  const lvs=1-0.28*sys-0.05*(sm(0.6,0.62,ph)*(1-sm(0.84,0.95,ph)));
+  const avo=sm(0.06,0.1,ph)*(1-sm(0.33,0.37,ph));
+  const mvo=Math.max(sm(0.45,0.5,ph)*(1-sm(0.5,0.66,ph)*0.6),0.4*sm(0.6,0.66,ph))*(1-sm(0.8,0.82,ph))+sm(0.82,0.88,ph)*(1-sm(0.93,0.99,ph))*0.85;
+  const atr=0.88+0.15*sm(0.05,0.42,ph)-0.07*sm(0.46,0.6,ph)-0.08*sm(0.84,0.95,ph)*(ph<0.99?1:0);
+  return {lvs,lvy:11.6+0.6*(lvs-0.72)/0.28,rvs:1-0.22*sys,atr,mvo:clamp(mvo,0,1),tvo:clamp(mvo*1.05,0,1),avo,pvo:avo};
+}
+function ecg(ph){
+  const g=(x,c,w,a)=>a*Math.exp(-(((x-c)/w)**2));
+  const x=ph<0.9?ph:ph-1;
+  return g(x,-0.09,0.025,0.12)+g(x,-0.012,0.006,-0.12)+g(x,0,0.008,1)+g(x,0.014,0.007,-0.25)+g(x,0.3,0.05,0.28);
+}
+
+/* ---------- plane ---------- */
+function plane(){
+  if(S.mode==='tee')return teePlane(S.P);
+  return ttePlane(S.base,S.T);
+}
+
+/* ---------- labels ---------- */
+const capS=(a,b,r,n=6)=>Array.from({length:n+1},(_,i)=>[add(a,sc(sub(b,a),i/n)),r]);
+const LABELS=[
+ ['LV',[...[5.5,6.5,7.5,8.5,9.5,10.5].map(y=>[[0.8,y,-0.2],1.6])]],
+ ['RV',[...[5.5,6.5,7.5,8.5].map(y=>[[-3.4,y,0.6],1.0]),...[[-2.9,6,2.4],[-3.6,7.2,1.6]].map(p=>[p,1.0])]],
+ ['LA',[[G.LA,1.5],[add(G.LA,[0.8,0,0.6]),1.2],[add(G.LA,[0.8,0,-0.6]),1.2]]],
+ ['RA',[[G.RA,1.5],[add(G.RA,[-0.4,0,0.7]),1.2],[add(G.RA,[-0.4,0,-0.7]),1.2]]],
+ ['MV',[[G.Cm,1.3]]],['TV',[[G.Ct,1.0]]],['AV',[[G.Ca,0.9]]],['PV',[[G.Cp,0.85]]],
+ ['LVOT',capS(G.ot0,add(G.Ca,sc(G.a,-0.6)),0.8,3)],
+ ['RVOT',capS(G.rv0,add(G.Cp,sc(G.pax,-1.0)),1.0,4)],
+ ['Asc Ao',capS(G.asc0,G.Atop,1.1,5)],['Arch',G.arch.slice(1,7).map(p=>[p,1.05])],
+ ['Desc Ao',capS(G.Dtop,G.Dbot,1.0,22)],
+ ['MPA',capS(G.Cp,G.Bpa,1.0,3)],['RPA',capS(G.Bpa,G.RPA,0.75,5)],['LPA',capS(G.Bpa,G.LPA,0.75,4)],
+ ['SVC',capS(G.svc[0],G.svc[1],0.75,5)],['IVC',capS(G.ivc[0],G.ivc[1],0.9,6)],
+ ['CS',capS(G.cs[0],G.cs[2],0.4,5)],['LAA',[[G.laa[1],0.5],[avg(...G.laa),0.5]]],
+ ['IAS',[[G.fossa,0.5],[G.sepP,0.5]]],
+];
+
+/* ---------- overlay ---------- */
+const ov=$('ov'),oc=ov.getContext('2d');const W=760,H=600,TOP=34,BOT=58;
+let ecgHist=new Float32Array(300).fill(0),ecgI=0;
+function proj(pl,P,depth){
+  const q=sub(P,pl.O),N=norm(cross(pl.B,pl.L));
+  const t=dot(q,pl.B),l=dot(q,pl.L),dn=dot(q,N);
+  const ppc=(H-TOP-BOT)/depth;
+  return {x:W/2+l*ppc,y:TOP+t*ppc,dn,r:Math.hypot(t,l),al:Math.atan2(l,t)};
+}
+function drawOverlay(pl,ph){
+  oc.setTransform(ov.width/W,0,0,ov.height/H,0,0);oc.clearRect(0,0,W,H);
+  const depth=S.depth[S.mode],half=45*D2R,ppc=(H-TOP-BOT)/depth;
+  // depth markers
+  oc.fillStyle='#8EA3AD';oc.font='500 11px "IBM Plex Mono", monospace';oc.textAlign='left';oc.textBaseline='middle';
+  for(let c=1;c<=depth;c++){const x=W/2+Math.sin(half)*c*ppc+6,y=TOP+Math.cos(half)*c*ppc;
+    oc.beginPath();oc.arc(x,y,c%5===0?2.5:1.3,0,7);oc.fill();if(c%5===0)oc.fillText(String(c),x+6,y)}
+  // orientation marker
+  oc.fillStyle='#49BFCD';oc.beginPath();
+  oc.moveTo(W/2-58,TOP-20);oc.lineTo(W/2-50,TOP-20);oc.lineTo(W/2-54,TOP-13);oc.fill();
+  // header text
+  oc.textAlign='left';oc.textBaseline='top';oc.font='600 15px "Barlow Condensed", sans-serif';oc.fillStyle='#D6E2E7';
+  const v=currentView();
+  const name=S.quiz&&!S.quiz.done?'?':(v?v.n:'Custom');
+  oc.fillText((S.mode==='tee'?'TEE  ':'TTE  ')+name,12,10);
+  oc.font='500 12px "IBM Plex Mono", monospace';oc.fillStyle='#8EA3AD';
+  if(S.mode==='tee'){
+    const P=S.P;oc.fillText(`${(32+P.adv).toFixed(0)} cm  ${P.flex>=0?'ante':'retro'} ${Math.abs(P.flex).toFixed(0)}°  turn ${P.turn<0?'R':'L'} ${Math.abs(P.turn).toFixed(0)}°`,12,30);
+    drawOmniIcon(W-62,52,P.omni);
+  }else{
+    oc.fillText(`rot ${S.T.rot.toFixed(0)}°  tilt ${S.T.tilt.toFixed(0)}°  rock ${S.T.rock.toFixed(0)}°`,12,30);
+  }
+  oc.fillText(`${depth.toFixed(1)} cm  HR ${HR}`,12,46);
+  // labels
+  if(S.labels&&!(S.quiz&&!S.quiz.done)){
+    oc.font='600 13px "IBM Plex Sans", sans-serif';oc.textAlign='center';oc.textBaseline='middle';
+    for(const [nm,samples] of LABELS){
+      let best=null;
+      for(const [P,r] of samples){const q=proj(pl,P,depth);
+        if(Math.abs(q.dn)<r*0.75&&q.r<depth-0.5&&q.r>0.8&&Math.abs(q.al)<half-0.06){const sc_=Math.abs(q.dn)/r;if(!best||sc_<best.s)best={s:sc_,q}}}
+      if(best){const tw=oc.measureText(nm).width+10;oc.fillStyle='rgba(3,5,6,.62)';oc.fillRect(best.q.x-tw/2,best.q.y-9,tw,18);
+        oc.fillStyle='#F2D46B';oc.fillText(nm,best.q.x,best.q.y)}
+    }
+  }
+  // ECG strip
+  const ey=H-26;oc.strokeStyle='#3BE36F';oc.lineWidth=1.5;oc.beginPath();
+  const n=ecgHist.length,x0=40,x1=W-40;
+  for(let i=0;i<n;i++){const k=(ecgI+i)%n,x=x0+(x1-x0)*i/(n-1),y=ey-ecgHist[k]*24;i?oc.lineTo(x,y):oc.moveTo(x,y)}
+  oc.stroke();
+  oc.fillStyle='#3BE36F';oc.beginPath();oc.arc(x1,ey-ecgHist[(ecgI+n-1)%n]*24,3,0,7);oc.fill();
+  if(S.frozen){oc.fillStyle='#F0A24B';oc.font='600 14px "Barlow Condensed", sans-serif';oc.textAlign='right';oc.textBaseline='top';oc.fillText('FROZEN',W-12,H-50)}
+}
+function drawOmniIcon(cx,cy,deg){
+  const r=26;oc.save();oc.strokeStyle='#5D7480';oc.lineWidth=1.5;oc.beginPath();oc.arc(cx,cy,r,0,Math.PI*2);oc.stroke();
+    oc.strokeStyle='#49BFCD';oc.lineWidth=3;oc.beginPath();
+  oc.moveTo(cx-Math.cos(deg*D2R)*r,cy+Math.sin(deg*D2R)*r);oc.lineTo(cx+Math.cos(deg*D2R)*r,cy-Math.sin(deg*D2R)*r);oc.stroke();
+  oc.fillStyle='#49BFCD';oc.beginPath();oc.arc(cx+Math.cos(deg*D2R)*r,cy-Math.sin(deg*D2R)*r,4,0,7);oc.fill();
+  oc.fillStyle='#D6E2E7';oc.font='600 14px "IBM Plex Mono", monospace';oc.textAlign='center';oc.textBaseline='top';oc.fillText(Math.round(deg)+'°',cx,cy+r+6);
+  oc.restore();
+}
+
+/* ---------- 3D locator ---------- */
+const lc=$('loc'),lx=lc.getContext('2d');let yaw=-0.5,pitch=0.25;
+function lproj(P){
+  const X=[1,0,0],Vv=G.V,A=G.Ant;
+  const c=[-0.6,4.0,1.0],q=sub(P,c);
+  let x=dot(q,X),y=dot(q,Vv),z=dot(q,A);
+  const cx=Math.cos(yaw),sx=Math.sin(yaw);[x,z]=[x*cx-z*sx,x*sx+z*cx];
+  const cp=Math.cos(pitch),sp=Math.sin(pitch);[y,z]=[y*cp-z*sp,y*sp+z*cp];
+  const k=lc.width/26;return [lc.width/2+x*k,lc.height/2-y*k,z];
+}
+function ellRing(c,r,ax){const pts=[];for(let i=0;i<=40;i++){const t=i/40*Math.PI*2;const p=[...c];const u=Math.cos(t),v=Math.sin(t);
+  if(ax===0){p[1]+=u*r[1];p[2]+=v*r[2]}else if(ax===1){p[0]+=u*r[0];p[2]+=v*r[2]}else{p[0]+=u*r[0];p[1]+=v*r[1]}pts.push(p)}return pts}
+function poly(pts,col,w){lx.strokeStyle=col;lx.lineWidth=w;lx.beginPath();pts.forEach((p,i)=>{const q=lproj(p);i?lx.lineTo(q[0],q[1]):lx.moveTo(q[0],q[1])});lx.stroke()}
+function drawLoc(pl,cs){
+  const css=getComputedStyle(document.documentElement);
+  lx.clearRect(0,0,lc.width,lc.height);
+  const ell=(c,r,col)=>{for(let a=0;a<3;a++)poly(ellRing(c,r,a),col,a===2?2:1.2)};
+  ell([0.8,5.2+(cs.lvy-5.2)/2,-0.2],[3.0,(cs.lvy-5.2)/2+1.6,3.0],'rgba(214,69,65,.75)');
+  ell([-2.9,7.0,0.6],[1.7,3.4,2.4],'rgba(70,120,220,.75)');
+  ell(G.LA,G.LAr,'rgba(214,69,65,.55)');ell(G.RA,G.RAr,'rgba(70,120,220,.55)');
+  poly([G.Ca,G.root,G.asc0,G.Atop,...G.arch,G.Dtop,G.Dbot],'rgba(214,69,65,.8)',7);
+  poly([G.rv0,G.Cp,G.Bpa,G.RPA],'rgba(70,120,220,.8)',6);poly([G.Bpa,G.LPA],'rgba(70,120,220,.8)',6);
+  poly([G.svc[1],G.svc[0]],'rgba(70,120,220,.6)',5);poly([G.ivc[0],G.ivc[1]],'rgba(70,120,220,.6)',6);
+  if(S.mode==='tee'){const pts=[];for(let s=-10;s<=16;s+=0.5)pts.push(pathPt(s));poly(pts,'rgba(140,150,160,.85)',5)}
+  // sector fan
+  const depth=S.depth[S.mode],half=45*D2R,fan=[pl.O];for(let i=0;i<=20;i++){const al=-half+2*half*i/20;fan.push(add(pl.O,sc(add(sc(pl.B,Math.cos(al)),sc(pl.L,Math.sin(al))),depth)))}
+  lx.fillStyle='rgba(73,191,205,.22)';lx.strokeStyle='rgba(46,160,90,.95)';lx.lineWidth=1.5;lx.beginPath();
+  fan.forEach((p,i)=>{const q=lproj(p);i?lx.lineTo(q[0],q[1]):lx.moveTo(q[0],q[1])});lx.closePath();lx.fill();lx.stroke();
+  const q=lproj(pl.O);lx.fillStyle=css.getPropertyValue('--ink');lx.beginPath();lx.arc(q[0],q[1],7,0,7);lx.fill();
+  // screen-right marker
+  const mk=lproj(add(pl.O,sc(add(sc(pl.B,Math.cos(half)),sc(pl.L,Math.sin(half))),depth)));lx.fillStyle='#F0A24B';lx.beginPath();lx.arc(mk[0],mk[1],6,0,7);lx.fill();
+  lx.font=`500 ${Math.round(lc.width*0.032)}px "IBM Plex Sans", sans-serif`;lx.fillStyle=css.getPropertyValue('--muted');lx.textAlign='left';lx.textBaseline='top';
+  const fs_=Math.round(lc.width*0.032);lx.fillText('Head up, patient left on your right',fs_*0.6,fs_*0.5);
+  lx.fillText('Orange dot marks screen right',fs_*0.6,fs_*1.9);
+}
+let drag=null;
+lc.addEventListener('pointerdown',e=>{drag=[e.clientX,e.clientY,yaw,pitch];lc.setPointerCapture(e.pointerId)});
+lc.addEventListener('pointermove',e=>{if(!drag)return;yaw=drag[2]+(e.clientX-drag[0])*0.01;pitch=clamp(drag[3]+(e.clientY-drag[1])*0.01,-1.4,1.4)});
+lc.addEventListener('pointerup',()=>drag=null);
+
+/* ---------- UI ---------- */
+const views=()=>S.mode==='tee'?TEEV:TTEV;
+function currentView(){return views().find(v=>v.id===S.view[S.mode])}
+function renderViews(){
+  let h='',g='';
+  for(const v of views()){if(v.g!==g){if(g)h+='</div>';g=v.g;h+=`<div class="vgroup">${g}</div><div class="views">`}
+    h+=`<button data-id="${v.id}" aria-pressed="${!S.quiz&&S.view[S.mode]===v.id}">${v.n}</button>`}
+  $('views').innerHTML=h+'</div>';
+}
+$('views').addEventListener('click',e=>{const b=e.target.closest('button');if(!b)return;S.quiz=null;renderQuiz();goView(b.dataset.id)});
+function goView(id,instant){
+  const v=views().find(x=>x.id===id);if(!v)return;S.view[S.mode]=id;S.depth[S.mode]=v.d;
+  if(S.mode==='tee'){const t=v.p();S.tgt=t;if(instant){S.P={...t};S.tgt=null}}
+  else{S.base=v.b();S.T={rot:0,tilt:0,rock:0}}
+  syncCtl();renderViews();renderGuide();
+}
+function syncCtl(){
+  const P=S.tgt||S.P;
+  $('omni').value=P.omni;$('omni-o').textContent=Math.round(P.omni)+'°';
+  $('adv').value=P.adv;$('adv-o').textContent=(32+P.adv).toFixed(1)+' cm';
+  $('turn').value=P.turn;$('turn-o').textContent=P.turn===0?'0°':(P.turn<0?'R ':'L ')+Math.abs(Math.round(P.turn))+'°';
+  $('flex').value=P.flex;$('flex-o').textContent=P.flex===0?'0°':(P.flex<0?'retro ':'ante ')+Math.abs(Math.round(P.flex))+'°';
+  $('lflex').value=P.lflex;$('lflex-o').textContent=P.lflex===0?'0°':(P.lflex<0?'R ':'L ')+Math.abs(Math.round(P.lflex))+'°';
+  ['rot','tilt','rock'].forEach(k=>{$(k).value=S.T[k];$(k+'-o').textContent=Math.round(S.T[k])+'°'});
+  $('depth').value=S.depth[S.mode];$('depth-o').textContent=S.depth[S.mode].toFixed(1)+' cm';
+  $('ctl-tee').hidden=S.mode!=='tee';$('ctl-tte').hidden=S.mode!=='tte';$('ctl-h').textContent=S.mode==='tee'?'TEE probe':'TTE transducer';
+  $('hint').textContent=S.mode==='tee'?'Keys: Q / E omniplane, ↑ ↓ advance / withdraw, ← → turn, W / S ante / retroflex. Drag the omniplane dial on the image.':'Keys: Q / E rotate, ↑ ↓ tilt, ← → rock. Pick a window from Standard views.';
+}
+function manual(){S.tgt=null;if(!S.quiz){S.view[S.mode]=null;renderViews();renderGuide()}}
+['adv','turn','flex','lflex','omni'].forEach(k=>$(k).addEventListener('input',e=>{if(S.tgt){S.P={...S.tgt}}manual();S.P[k]=+e.target.value;syncCtl()}));
+document.querySelectorAll('.omni .mini').forEach(b=>b.addEventListener('click',()=>{if(S.tgt)S.P={...S.tgt};manual();S.P.omni=clamp(S.P.omni+ +b.dataset.d,0,180);syncCtl()}));
+['rot','tilt','rock'].forEach(k=>$(k).addEventListener('input',e=>{S.T[k]=+e.target.value;manual();syncCtl()}));
+$('depth').addEventListener('input',e=>{S.depth[S.mode]=+e.target.value;syncCtl()});
+document.querySelectorAll('.mtab').forEach(b=>b.addEventListener('click',()=>{setMode(b.dataset.m)}));
+function setMode(m){S.mode=m;S.quiz=null;document.querySelectorAll('.mtab').forEach(x=>x.setAttribute('aria-selected',String(x.dataset.m===m)));
+  if(m==='tte'&&!S.base)goView(S.view.tte||'a4c',true);else if(S.view[m])goView(S.view[m],true);renderQuiz();renderViews();renderGuide();syncCtl()}
+$('freeze').addEventListener('click',()=>{S.frozen=!S.frozen;$('freeze').setAttribute('aria-pressed',S.frozen);$('freeze').textContent=S.frozen?'Unfreeze':'Freeze'});
+$('labels').addEventListener('click',()=>{S.labels=!S.labels;$('labels').setAttribute('aria-pressed',S.labels)});
+$('slow').addEventListener('click',()=>{S.slow=!S.slow;$('slow').setAttribute('aria-pressed',S.slow)});
+document.addEventListener('keydown',e=>{
+  if(/INPUT|TEXTAREA/.test(e.target.tagName))return;const k=e.key;let used=true;
+  if(S.mode==='tee'){if(S.tgt)S.P={...S.tgt},S.tgt=null;const P=S.P;
+    if(k==='q'||k==='Q')P.omni=clamp(P.omni-5,0,180);else if(k==='e'||k==='E')P.omni=clamp(P.omni+5,0,180);
+    else if(k==='ArrowUp')P.adv=clamp(P.adv-0.5,-10,16);else if(k==='ArrowDown')P.adv=clamp(P.adv+0.5,-10,16);
+    else if(k==='ArrowLeft')P.turn=clamp(P.turn+5,-180,180);else if(k==='ArrowRight')P.turn=clamp(P.turn-5,-180,180);
+    else if(k==='w'||k==='W')P.flex=clamp(P.flex+5,-60,100);else if(k==='s'||k==='S')P.flex=clamp(P.flex-5,-60,100);
+    else if(k===' '){$('freeze').click()}else used=false;
+  }else{const T=S.T;
+    if(k==='q'||k==='Q')T.rot=clamp(T.rot-5,-90,90);else if(k==='e'||k==='E')T.rot=clamp(T.rot+5,-90,90);
+    else if(k==='ArrowUp')T.tilt=clamp(T.tilt+2,-40,40);else if(k==='ArrowDown')T.tilt=clamp(T.tilt-2,-40,40);
+    else if(k==='ArrowLeft')T.rock=clamp(T.rock-2,-30,30);else if(k==='ArrowRight')T.rock=clamp(T.rock+2,-30,30);
+    else if(k===' '){$('freeze').click()}else used=false;}
+  if(used){e.preventDefault();if(k!==' ')manual();syncCtl()}
+});
+// omniplane dial drag on the image
+let odrag=false;
+function omniFromEvent(e){const r=ov.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*W-(W-62),y=(e.clientY-r.top)/r.height*H-52;
+  let a=Math.atan2(-y,x)/D2R;if(a<0)a+=180;return clamp(Math.round(a),0,180)}
+ov.addEventListener('pointerdown',e=>{if(S.mode!=='tee')return;const r=ov.getBoundingClientRect(),x=(e.clientX-r.left)/r.width*W,y=(e.clientY-r.top)/r.height*H;
+  if(Math.hypot(x-(W-62),y-52)<40){odrag=true;ov.setPointerCapture(e.pointerId);if(S.tgt)S.P={...S.tgt};manual();S.P.omni=omniFromEvent(e);syncCtl()}});
+ov.addEventListener('pointermove',e=>{if(odrag){S.P.omni=omniFromEvent(e);syncCtl()}});
+ov.addEventListener('pointerup',()=>odrag=false);
+
+function renderGuide(){
+  const v=currentView();
+  if(S.quiz&&!S.quiz.done){$('guide').innerHTML='<h2>View guide</h2><h3>Mystery view</h3><p>Labels are hidden. Use the 3D panel and the probe settings to work out where you are, then answer on the right.</p>';return}
+  if(!v){$('guide').innerHTML='<h2>View guide</h2><h3>Custom plane</h3><p>You are between standard views. Pick a view to snap back, or keep exploring: every position is a true cut through the same 3D heart.</p>';return}
+  let how='';
+  if(S.mode==='tee'){const P=S.tgt||S.P;how=`Probe ${(32+P.adv).toFixed(0)} cm · omniplane ${Math.round(P.omni)}° · ${P.flex<0?'retroflex':'anteflex'} ${Math.abs(Math.round(P.flex))}° · turn ${P.turn<0?'right':'left'} ${Math.abs(Math.round(P.turn))}°`}
+  else how=`${v.g} window · depth ${v.d} cm`;
+  $('guide').innerHTML=`<h2>View guide</h2><h3>${v.n}</h3><div class="how">${how}</div><p>${v.see}</p>`;
+}
+/* quiz */
+let score={r:0,n:0};
+function renderQuiz(){
+  $('score').textContent=score.n?`${score.r} / ${score.n}`:'';
+  if(!S.quiz){$('quiz').innerHTML='<p class="muted" style="margin:0">Load a random standard view with labels hidden, then pick its name.</p>';return}
+  const q=S.quiz,vs=views();
+  $('quiz').innerHTML=`<p style="margin:0">${q.done?(q.right?'<b>Correct.</b> ':'<b>Not quite.</b> ')+'This is the <b>'+vs.find(v=>v.id===q.id).n+'</b>.':'Which view is on the screen?'}</p>
+  <div class="quiz-opts">${q.opts.map(o=>{const v=vs.find(x=>x.id===o);return `<button data-o="${o}" class="${q.done?(o===q.id?'right':o===q.pick?'wrong':''):''}" ${q.done?'disabled':''}>${v.n}</button>`}).join('')}</div>`;
+}
+$('q-new').addEventListener('click',()=>{const vs=views();const pick=vs[Math.floor(Math.random()*vs.length)];
+  const others=vs.filter(v=>v.id!==pick.id).sort(()=>Math.random()-0.5).slice(0,3).map(v=>v.id);
+  S.quiz={id:pick.id,opts:[pick.id,...others].sort(()=>Math.random()-0.5),done:false};goView(pick.id,true);renderQuiz();renderViews();renderGuide()});
+$('quiz').addEventListener('click',e=>{const b=e.target.closest('button[data-o]');if(!b||!S.quiz||S.quiz.done)return;
+  S.quiz.pick=b.dataset.o;S.quiz.done=true;S.quiz.right=S.quiz.pick===S.quiz.id;score.n++;if(S.quiz.right)score.r++;renderQuiz();renderViews();renderGuide()});
+
+/* ---------- loop ---------- */
+function fit(){
+  const r=glc.getBoundingClientRect(),dpr=Math.min(window.devicePixelRatio||1,1.5);
+  const w=Math.round(r.width*dpr),h=Math.round(r.height*dpr);
+  if(glc.width!==w||glc.height!==h){glc.width=w;glc.height=h;ov.width=w;ov.height=h}
+  const lr=lc.getBoundingClientRect(),lw=Math.round(lr.width*dpr);if(lw&&lc.width!==lw){lc.width=lw;lc.height=lw}
+}
+function frame(now){
+  const dt=Math.min(0.05,(now-lastNow)/1000);lastNow=now;
+  if(!S.frozen){tPhys+=dt*(S.slow?0.25:1)}
+  // animate toward preset
+  if(S.tgt){const k=Math.min(1,dt*5),P=S.P,T=S.tgt;let done=true;
+    for(const key of ['adv','turn','flex','lflex','omni']){P[key]=lerp(P[key],T[key],k);if(Math.abs(P[key]-T[key])>0.05)done=false}
+    if(done){S.P={...T};S.tgt=null}}
+  const ph=(tPhys*HR/60)%1;
+  if(!S.frozen){const steps=Math.max(1,Math.round(dt*300*0.4));for(let i=0;i<steps;i++){ecgHist[ecgI]=ecg(((tPhys-(steps-1-i)/120)*HR/60)%1);ecgI=(ecgI+1)%ecgHist.length}}
+  const cs=cycle(ph),pl=plane();
+  gl.viewport(0,0,glc.width,glc.height);
+  gl.uniform2f(U.uRes,glc.width,glc.height);
+  const sF=glc.height/H;
+  gl.uniform3fv(U.uO,pl.O);gl.uniform3fv(U.uB,pl.B);gl.uniform3fv(U.uL,pl.L);
+  gl.uniform1f(U.uDepth,S.depth[S.mode]);gl.uniform1f(U.uHalf,45*D2R);gl.uniform1f(U.uTop,TOP*sF);gl.uniform1f(U.uBot,BOT*sF);
+  // shader ppc uses (res.y - top - 58) so scale bottom margin too
+  gl.uniform1f(U.uMode,S.mode==='tee'?0:1);gl.uniform1f(U.uTime,S.frozen?0:tPhys);
+  gl.uniform1f(U.uLVs,cs.lvs);gl.uniform1f(U.uLVy,cs.lvy);gl.uniform1f(U.uRVs,cs.rvs);gl.uniform1f(U.uAtr,cs.atr);
+  gl.uniform1f(U.uMVo,cs.mvo);gl.uniform1f(U.uTVo,cs.tvo);gl.uniform1f(U.uAVo,cs.avo);gl.uniform1f(U.uPVo,cs.pvo);gl.uniform1f(U.uGain,1.15);
+  gl.enable(gl.BLEND);gl.blendFunc(gl.CONSTANT_ALPHA,gl.ONE_MINUS_CONSTANT_ALPHA);gl.blendColor(0,0,0,S.frozen?1:0.6);
+  gl.drawArrays(gl.TRIANGLE_STRIP,0,4);
+  drawOverlay(pl,ph);drawLoc(pl,cs);
+  if(S.tgt)syncCtl();
+  requestAnimationFrame(frame);
+}
+let lastH=0;
+function postH(){const h=Math.ceil(document.documentElement.scrollHeight);if(h!==lastH){lastH=h;try{parent.postMessage({labHeight:h,lab:'echo-sim',echoSimHeight:h},'*')}catch(e){}}}
+try{
+  initGL();
+  new ResizeObserver(()=>{fit();postH()}).observe(document.body);
+  goView('me4c',true);renderQuiz();fit();requestAnimationFrame(frame);
+}catch(err){document.querySelector('.screen').innerHTML='<p class="err">This simulator needs WebGL. Try a current version of Chrome, Safari or Edge. ('+String(err.message).slice(0,200)+')</p>';console.error(err)}
+window.__sim={S,goView,setMode,TEEV,TTEV,setPhase:ph=>{tPhys=ph*60/HR}};
+})();
+</script>
