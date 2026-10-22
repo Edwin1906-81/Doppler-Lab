@@ -48,6 +48,13 @@ h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spaci
 .btn.freeze[aria-pressed="true"]{background:#F0A24B;border-color:#F0A24B;color:#2A1600}
 .btn:disabled{opacity:.4;cursor:not-allowed}
 .hint{color:var(--mon-muted);font-size:.82rem;flex:1 1 220px;min-width:0}
+.zoomctl{display:flex;align-items:center;gap:4px;flex-wrap:wrap}
+.zl{font-family:var(--font-display);font-weight:600;letter-spacing:.08em;text-transform:uppercase;font-size:.8rem;color:var(--mon-muted);margin-right:2px}
+.zseg{display:flex;gap:2px;background:#111A1F;border:1px solid #33454E;border-radius:6px;padding:2px}
+.zseg button{font-family:var(--font-mono);font-size:.78rem;border:0;background:transparent;color:#D6E2E7;padding:4px 8px;border-radius:4px;cursor:pointer}
+.zseg button[aria-pressed="true"]{background:#49BFCD;color:#06262B}
+.btn.zb{padding:4px 10px;font-family:var(--font-mono);font-size:1rem;line-height:1}
+.btn.zb:disabled{opacity:.35;cursor:default}
 .rack{display:grid;gap:12px;min-width:0}
 .leftcol{display:grid;gap:16px;min-width:0}
 .panel{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;min-width:0}
@@ -129,7 +136,8 @@ h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spaci
         <button class="btn freeze" id="freeze" aria-pressed="false">Freeze</button>
         <button class="btn" id="float">Float PA catheter</button>
         <button class="btn" id="flush">Fast-flush test</button>
-        <span class="hint" id="hint">Space bar freezes. When frozen, hover or tap any trace to read its pressure.</span>
+        <span class="zoomctl" role="group" aria-label="Zoom a waveform"><span class="zl">Zoom</span><span class="zseg" id="zoom"><button data-v="all">All</button><button data-v="art">ART</button><button data-v="pa">PA</button><button data-v="cvp">CVP</button><button data-v="ecg">ECG</button></span><button class="btn zb" id="zout" aria-label="Zoom out vertically">−</button><button class="btn zb" id="zin" aria-label="Zoom in vertically">+</button></span>
+        <span class="hint" id="hint">Space bar freezes. Double-click a trace to zoom it. When frozen, hover or tap a trace to read its pressure.</span>
       </div>
     </div>
     <section class="panel guide">
@@ -159,7 +167,7 @@ h1{font-family:var(--font-display);font-weight:700;font-size:2.1rem;letter-spaci
         <div class="ctl"><span class="lbl">Breathing</span><output id="vent-o"></output>
           <div class="seg" id="vent"><button data-v="spont">Spontaneous</button><button data-v="mech">Ventilator</button></div></div>
         <div class="ctl"><span class="lbl">Sweep speed</span><output id="sw-o"></output>
-          <div class="seg" id="sweep"><button data-v="12.5">12.5</button><button data-v="25">25</button><button data-v="50">50</button></div></div>
+          <div class="seg" id="sweep"><button data-v="12.5">12.5</button><button data-v="25">25</button><button data-v="50">50</button><button data-v="100">100</button></div></div>
       </section>
       <section class="panel">
         <h2>Pressures</h2>
@@ -278,7 +286,7 @@ const GUIDE={
 
 /* ---------------- state ---------------- */
 const S=JSON.parse(JSON.stringify(BASE));
-Object.assign(S,{scen:'normal',pos:'PA',damp:'optimal',sweep:25,frozen:false,quiz:null});
+Object.assign(S,{scen:'normal',pos:'PA',damp:'optimal',sweep:25,frozen:false,quiz:null,zoom:'all',zf:1});
 
 /* ---------------- simulation ---------------- */
 const STEP=0.001;
@@ -441,6 +449,8 @@ const CH={ecg:{y0:8,h:84,min:-0.45,max:1.25,col:'#3BE36F'},
   cvp:{y0:384,h:100,min:0,max:20,col:'#57C7FF',grid:5},
   resp:{y0:494,h:40,min:-0.1,max:1.15,col:'#D9E2E6'}};
 const KEYS=['ecg','art','pa','cvp','resp'];
+const LAYOUT_ALL={ecg:[8,84],art:[104,128],pa:[244,128],cvp:[384,100],resp:[494,40]};
+const DEF={art:{min:0,max:160,grid:40},pa:{min:0,max:40,grid:10},cvp:{min:0,max:20,grid:5},ecg:{min:-0.45,max:1.25}};
 const buf={};KEYS.forEach(k=>buf[k]=new Float32Array(W).fill(NaN));
 const posBuf=new Array(W).fill('');
 let sweepX=0,colAcc=0;
@@ -457,21 +467,23 @@ const yOf=(k,v)=>{const c=CH[k];return c.y0+c.h*(1-(v-c.min)/(c.max-c.min))};
 function clearSlice(x0,w){
   ctx.fillStyle='#04080A';ctx.fillRect(x0,0,w,H);
   ctx.strokeStyle='#14262E';ctx.lineWidth=1;ctx.beginPath();
-  for(const k of['art','pa','cvp']){const c=CH[k];for(let v=c.min;v<=c.max+0.01;v+=c.grid){const y=Math.round(yOf(k,v))+0.5;ctx.moveTo(x0,y);ctx.lineTo(x0+w,y)}}
+  for(const k of['art','pa','cvp']){const c=CH[k];if(c.hidden)continue;for(let v=c.min;v<=c.max+0.01;v+=c.grid){const y=Math.round(yOf(k,v))+0.5;ctx.moveTo(x0,y);ctx.lineTo(x0+w,y)}}
   ctx.stroke();
 }
 function seg(k,x){
+  const c=CH[k];if(c.hidden)return;
   const a=buf[k][x-1],b=buf[k][x];if(isNaN(a)||isNaN(b))return;
-  const c=CH[k],lo=c.y0-6,hi=c.y0+c.h+4;
+  const lo=c.y0-6,hi=c.y0+c.h+4;
   ctx.moveTo(x-1,clamp(yOf(k,a),lo,hi));ctx.lineTo(x,clamp(yOf(k,b),lo,hi));
 }
 function drawSegs(x){
-  for(const k of KEYS){ctx.strokeStyle=CH[k].col;ctx.lineWidth=k==='resp'?1.2:1.7;ctx.beginPath();seg(k,x);ctx.stroke()}
+  for(const k of KEYS){if(CH[k].hidden)continue;ctx.strokeStyle=CH[k].col;ctx.lineWidth=lw(k);ctx.beginPath();seg(k,x);ctx.stroke()}
 }
+const lw=k=>k==='resp'?1.2:(S.zoom===k?2.4:1.7);
 function redrawAll(){
   ctx.setTransform(scale,0,0,scale,0,0);clearSlice(0,W);
   ctx.lineJoin='round';
-  for(const k of KEYS){ctx.strokeStyle=CH[k].col;ctx.lineWidth=k==='resp'?1.2:1.7;ctx.beginPath();for(let x=1;x<W;x++)seg(k,x);ctx.stroke()}
+  for(const k of KEYS){if(CH[k].hidden)continue;ctx.strokeStyle=CH[k].col;ctx.lineWidth=lw(k);ctx.beginPath();for(let x=1;x<W;x++)seg(k,x);ctx.stroke()}
 }
 function sampleColumn(){
   const x=sweepX;
@@ -487,11 +499,16 @@ function drawOverlay(cursor){
   octx.font='600 15px "Barlow Condensed", "Arial Narrow", sans-serif';octx.textBaseline='top';
   const lab={ecg:'II',art:'ART',pa:posName[S.pos],cvp:'CVP',resp:S.vent==='mech'?'Paw':'RESP'};
   for(const k of KEYS){
-    const c=CH[k];octx.fillStyle=c.col;octx.fillText(lab[k],6,c.y0+1);
-    if(c.grid){octx.font='500 11px "IBM Plex Mono", monospace';octx.fillStyle=c.col;octx.globalAlpha=.75;
-      octx.textBaseline='middle';octx.fillText(String(c.max),W-34,yOf(k,c.max)+7);octx.fillText(String(c.min),W-34,yOf(k,c.min)-7);
-      octx.globalAlpha=1;octx.textBaseline='top';octx.font='600 15px "Barlow Condensed", "Arial Narrow", sans-serif';}
+    const c=CH[k];if(c.hidden)continue;const big=S.zoom===k;
+    octx.font=big?'600 20px "Barlow Condensed", "Arial Narrow", sans-serif':'600 15px "Barlow Condensed", "Arial Narrow", sans-serif';
+    octx.fillStyle=c.col;octx.fillText(lab[k]+(big&&k!=='ecg'?'  mmHg':''),6,c.y0+1);
+    if(c.grid){octx.font='500 11px "IBM Plex Mono", monospace';octx.fillStyle=c.col;octx.globalAlpha=.75;octx.textBaseline='middle';
+      if(big){for(let v=c.min;v<=c.max+0.01;v+=c.grid){const y=yOf(k,v);octx.fillText(String(+v.toFixed(1)),W-34,clamp(y,c.y0+7,c.y0+c.h-7))}}
+      else{octx.fillText(String(c.max),W-34,yOf(k,c.max)+7);octx.fillText(String(c.min),W-34,yOf(k,c.min)-7)}
+      octx.globalAlpha=1;octx.textBaseline='top';}
   }
+  if(S.zoom!=='all'){octx.font='500 12px "IBM Plex Mono", monospace';octx.fillStyle='#8EA3AD';octx.textBaseline='top';
+    octx.fillText(`zoom ${S.zf.toFixed(S.zf<1?2:1)}×  ·  ${S.sweep} mm/s  ·  double-click for all`,W-380,CH[S.zoom].y0+4)}
   if(S.frozen){
     octx.fillStyle='#F0A24B';octx.font='600 14px "Barlow Condensed", sans-serif';octx.fillText('FROZEN',W-70,4);
   }
@@ -509,14 +526,54 @@ function drawOverlay(cursor){
 }
 function niceMax(v,step,minv){return Math.max(minv,Math.ceil(v/step)*step)}
 function updateScales(){
-  const before=[CH.art.max,CH.pa.max,CH.cvp.max].join();
-  CH.art.max=niceMax(S.sbp+35,40,160);
+  const before=['art','pa','cvp','ecg'].map(k=>CH[k].min+','+CH[k].max).join();
+  DEF.art.max=niceMax(S.sbp+35,40,160);
   const paTop=Math.max(S.pasp+6,S.pcwp+S.mrV+S.la.v+8);
-  CH.pa.max=niceMax(paTop,10,40);CH.pa.grid=CH.pa.max>60?20:10;
-  CH.cvp.max=niceMax(S.cvp+Math.max(S.ra.a*3,S.ra.cv,S.ra.v,6)+6,10,20);CH.cvp.grid=CH.cvp.max>30?10:5;
-  if(before!==[CH.art.max,CH.pa.max,CH.cvp.max].join()){redrawAll()}
+  DEF.pa.max=niceMax(paTop,10,40);DEF.pa.grid=DEF.pa.max>60?20:10;
+  DEF.cvp.max=niceMax(S.cvp+Math.max(S.ra.a*3,S.ra.cv,S.ra.v,6)+6,10,20);DEF.cvp.grid=DEF.cvp.max>30?10:5;
+  for(const k of ['art','pa','cvp','ecg'])if(S.zoom!==k)Object.assign(CH[k],DEF[k]);
+  if(S.zoom!=='all')fitFocus();
+  if(before!==['art','pa','cvp','ecg'].map(k=>CH[k].min+','+CH[k].max).join()){redrawAll()}
   drawOverlay();
 }
+/* zoom: focused channel fills the monitor, scale fitted to the waveform */
+function setLayout(){
+  const z=S.zoom;
+  for(const k of KEYS){const c=CH[k];c.hidden=false;[c.y0,c.h]=LAYOUT_ALL[k]}
+  if(z!=='all'){
+    for(const k of KEYS)CH[k].hidden=!(k===z||k==='ecg'||k==='resp');
+    if(z==='ecg'){CH.ecg.y0=10;CH.ecg.h=460}
+    else{CH.ecg.y0=6;CH.ecg.h=58;CH[z].y0=78;CH[z].h=400}
+    CH.resp.y0=492;CH.resp.h=40;
+  }
+}
+function niceStep(span){return span<=6?1:span<=14?2:span<=36?5:span<=90?10:20}
+function fitFocus(){
+  const k=S.zoom;if(k==='all')return;const c=CH[k];
+  if(k==='ecg'){const half=0.85/S.zf,mid=0.4;c.min=+(mid-half).toFixed(2);c.max=+(mid+half).toFixed(2);return}
+  let lo=Infinity,hi=-Infinity;const b=buf[k];
+  for(let i=0;i<W;i++){const v=b[i];if(!isNaN(v)&&v<250){if(v<lo)lo=v;if(v>hi)hi=v}}
+  if(!isFinite(lo)){Object.assign(c,DEF[k]);return}
+  const mid=(lo+hi)/2;let half=Math.max((hi-lo)/2*1.15,2)/S.zf;
+  const st=niceStep(half*2);
+  c.min=Math.floor((mid-half)/st)*st;c.max=Math.ceil((mid+half)/st)*st;if(c.max-c.min<st*2)c.max=c.min+st*2;
+  if(k!=='ecg')c.min=Math.max(c.min,k==='art'?0:-10);
+  c.grid=st;
+}
+let sweepBefore=null;
+function setZoom(z){
+  if(z!=='all'&&S.zoom==='all'&&S.sweep<50){sweepBefore=S.sweep;S.sweep=50;syncSeg()}
+  if(z==='all'&&sweepBefore!==null){S.sweep=sweepBefore;sweepBefore=null;syncSeg()}
+  S.zoom=z;if(z==='all')S.zf=1;
+  document.querySelectorAll('#zoom button').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.v===z)));
+  $('zin').disabled=$('zout').disabled=z==='all';
+  setLayout();for(const k of ['art','pa','cvp','ecg'])if(k!==z)Object.assign(CH[k],DEF[k]);
+  fitFocus();redrawAll();drawOverlay();
+}
+$('zoom').addEventListener('click',e=>{const b=e.target.closest('button');if(b)setZoom(b.dataset.v)});
+$('zin').addEventListener('click',()=>{S.zf=Math.min(4,S.zf*1.4);fitFocus();redrawAll();drawOverlay()});
+$('zout').addEventListener('click',()=>{S.zf=Math.max(0.5,S.zf/1.4);fitFocus();redrawAll();drawOverlay()});
+let fitT=0;
 
 /* ---------------- numerics ---------------- */
 function recent(arr,win){return arr.filter(b=>t-b.t<=win)}
@@ -603,7 +660,7 @@ segGroup('pos','pos',()=>{stopFloat();paRec=[];drawOverlay();syncSeg()});
 segGroup('damp','damp',()=>{artRec=[]});
 segGroup('rhythm','rhythm',()=>{resetRhythm();renderGuide()});
 segGroup('vent','vent',()=>{drawOverlay();renderGuide()});
-segGroup('sweep','sweep');
+segGroup('sweep','sweep',()=>{sweepBefore=null;drawOverlay()});
 function syncControls(){Object.keys(SL).forEach(k=>{$(k).value=S[k];$(k+'-o').textContent=SL[k](S[k])});syncSeg();renderScenBtns()}
 
 function renderScenBtns(){
@@ -636,12 +693,13 @@ $('freeze').addEventListener('click',()=>setFreeze(!S.frozen));
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&!/INPUT|BUTTON|TEXTAREA/.test(e.target.tagName)){e.preventDefault();setFreeze(!S.frozen)}});
 function cursorAt(e){
   const r=ov.getBoundingClientRect(),x=Math.round((e.clientX-r.left)/r.width*W),y=(e.clientY-r.top)/r.height*H;
-  let k='ecg';for(const kk of KEYS){const c=CH[kk];if(y>=c.y0-6&&y<=c.y0+c.h+6)k=kk}
+  let k='ecg';for(const kk of KEYS){const c=CH[kk];if(!c.hidden&&y>=c.y0-6&&y<=c.y0+c.h+6)k=kk}
   return {x:clamp(x,0,W-1),k};
 }
 ov.addEventListener('pointermove',e=>{if(S.frozen)drawOverlay(cursorAt(e))});
 ov.addEventListener('pointerdown',e=>{if(S.frozen)drawOverlay(cursorAt(e))});
 ov.addEventListener('pointerleave',()=>{if(S.frozen)drawOverlay()});
+ov.addEventListener('dblclick',e=>{const {k}=cursorAt(e);if(S.zoom!=='all')setZoom('all');else if(k!=='resp')setZoom(k)});
 
 /* quiz */
 let score={r:0,n:0};
@@ -670,6 +728,7 @@ function frame(now){
     simAcc+=dt;const colDt=(W/(S.sweep*5))/W; // 25 mm/s -> 8 s across
     while(simAcc>=STEP){simAcc-=STEP;step(STEP);colAcc+=STEP;if(colAcc>=colDt){colAcc-=colDt;sampleColumn()}}
     numT+=dt;if(numT>0.4){numT=0;updateNumerics()}
+    if(S.zoom!=='all'&&S.zoom!=='ecg'){fitT+=dt;if(fitT>1.2){fitT=0;const c=CH[S.zoom],b=c.min+','+c.max;fitFocus();if(b!==c.min+','+c.max){redrawAll();drawOverlay()}}}
   }
   requestAnimationFrame(frame);
 }
@@ -680,6 +739,6 @@ function postH(){const h=Math.ceil(document.documentElement.scrollHeight);if(h!=
 new ResizeObserver(()=>{postH()}).observe(document.body);
 new ResizeObserver(()=>fitCanvas()).observe(cv);
 
-applyScen('normal');renderQuiz();fitCanvas();requestAnimationFrame(frame);
+applyScen('normal');renderQuiz();setZoom('all');fitCanvas();requestAnimationFrame(frame);
 })();
 </script>
