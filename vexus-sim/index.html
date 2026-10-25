@@ -1,0 +1,702 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>VExUS Simulator</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: instrument console. Control rail on the left, three stacked Doppler scopes on the right, grade strip on top. Scopes stay dark in both themes like a real ultrasound screen. */
+:root {
+  --bg: #edf0f3;
+  --surface: #ffffff;
+  --surface-2: #f5f7f9;
+  --ink: #15212b;
+  --muted: #5b6b78;
+  --line: #d4dbe2;
+  --accent: #1f5ea8;
+  --accent-ink: #ffffff;
+  --doppler-red: #c43d2c;
+  --doppler-blue: #2a69d1;
+  --ok: #2b8754;
+  --warn: #a8701a;
+  --bad: #c03b28;
+  --ok-bg: #e3f2e9;
+  --warn-bg: #fbf0dc;
+  --bad-bg: #fae4e0;
+  --scope-bg: #0a0f13;
+  --scope-line: #1d2832;
+  --scope-text: #9db0bf;
+  --scope-baseline: #e2c15a;
+  --scope-ecg: #74d39f;
+  --font-display: "Barlow Condensed", "Arial Narrow", "Helvetica Neue", Arial, sans-serif;
+  --font-body: "IBM Plex Sans", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 14px; line-height: 1.5;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px));
+  padding-block: 20px 40px;
+}
+[hidden] { display: none !important; }
+.wrap { max-width: 1240px; margin: 0 auto; display: flex; flex-direction: column; gap: 18px; }
+header.top { display: flex; flex-wrap: wrap; align-items: end; justify-content: space-between; gap: 12px; }
+header.top h1 { font-family: var(--font-display); font-weight: 700; font-size: 2.3rem; line-height: 1; margin: 0; letter-spacing: .01em; text-wrap: balance; }
+header.top h1 span { color: var(--accent); }
+header.top p { margin: 4px 0 0; color: var(--muted); max-width: 60ch; }
+.btn {
+  font: 600 13px/1 var(--font-body); padding: 9px 14px; border-radius: 6px; border: 1px solid var(--line);
+  background: var(--surface); color: var(--ink); cursor: pointer;
+}
+.btn:hover { border-color: var(--accent); }
+.btn.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.btn:focus-visible, .chip:focus-visible, input:focus-visible, select:focus-visible, .seg button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+/* Summary strip */
+.summary { display: grid; grid-template-columns: repeat(4, minmax(0,1fr)) minmax(0,1.3fr); gap: 1px; background: var(--line); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.cell { background: var(--surface); padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.cell .lab { font: 600 11px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.cell .val { font: 500 18px/1.2 var(--font-mono); font-variant-numeric: tabular-nums; }
+.pill { display: inline-flex; align-items: center; gap: 6px; font: 600 12px/1 var(--font-body); padding: 5px 8px; border-radius: 999px; width: fit-content; }
+.pill.normal { background: var(--ok-bg); color: var(--ok); }
+.pill.mild { background: var(--warn-bg); color: var(--warn); }
+.pill.severe { background: var(--bad-bg); color: var(--bad); }
+.pill.na { background: var(--surface-2); color: var(--muted); }
+.grade-cell { background: var(--surface-2); flex-direction: row; align-items: center; gap: 14px; }
+.grade-num { font: 700 3.1rem/1 var(--font-display); min-width: 1.4ch; text-align: center; }
+.grade-num.g0 { color: var(--ok); }
+.grade-num.g1 { color: var(--warn); }
+.grade-num.g2, .grade-num.g3 { color: var(--bad); }
+.grade-text { font-size: 13px; color: var(--muted); }
+.grade-text strong { display: block; color: var(--ink); font-size: 14px; }
+
+.layout { display: grid; grid-template-columns: 300px minmax(0,1fr); gap: 18px; align-items: start; }
+.rail { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 18px; position: sticky; top: 12px; }
+.rail h2, .notes h2, .quiz h2 { font: 700 1.15rem/1.1 var(--font-display); letter-spacing: .03em; text-transform: uppercase; margin: 0; }
+.group { display: flex; flex-direction: column; gap: 8px; }
+.group > .lab { font: 600 11px/1.2 var(--font-body); text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { font: 500 12px/1 var(--font-body); padding: 7px 9px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.chip.on { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); }
+.chip.pit { border-style: dashed; }
+.slider-row { display: flex; flex-direction: column; gap: 4px; }
+.slider-row .top { display: flex; justify-content: space-between; gap: 8px; }
+.slider-row output { font: 500 13px var(--font-mono); font-variant-numeric: tabular-nums; }
+input[type=range] { width: 100%; accent-color: var(--accent); }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: 500 12px/1 var(--font-body); padding: 7px 10px; border: 0; background: var(--surface-2); color: var(--ink); cursor: pointer; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button.on { background: var(--accent); color: var(--accent-ink); }
+.toggle { display: flex; align-items: center; gap: 8px; cursor: pointer; }
+.toggle input { accent-color: var(--accent); width: 16px; height: 16px; }
+select { font: 500 13px var(--font-body); padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line); background: var(--surface-2); color: var(--ink); }
+.hint { font-size: 12px; color: var(--muted); margin: 0; }
+
+.scopes { display: flex; flex-direction: column; gap: 14px; min-width: 0; }
+.scope { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.scope-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 8px 14px; padding: 10px 14px; }
+.scope-head h3 { font: 700 1.3rem/1 var(--font-display); margin: 0; letter-spacing: .02em; }
+.scope-head .sub { font-size: 12px; color: var(--muted); }
+.title-block { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.head-right { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+.cdot { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted); }
+.cdot i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+.screen { background: var(--scope-bg); position: relative; }
+.screen canvas { display: block; width: 100%; height: 240px; }
+.screen .tag { position: absolute; left: 10px; top: 8px; font: 500 11px var(--font-mono); color: var(--scope-text); pointer-events: none; }
+.screen .calip { position: absolute; right: 46px; top: 8px; font: 500 11px var(--font-mono); color: var(--scope-baseline); pointer-events: none; text-align: right; }
+.scope-foot { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 10px 14px; border-top: 1px solid var(--line); }
+.scope-foot .slider-row { flex: 1 1 220px; max-width: 340px; }
+.warnline { font-size: 12px; font-weight: 500; }
+.warnline.w { color: var(--warn); }
+.warnline.b { color: var(--bad); }
+.warnline.o { color: var(--ok); }
+
+.notesbox { border-radius: 8px; padding: 10px 12px; background: var(--warn-bg); color: var(--ink); font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.notesbox strong { color: var(--warn); }
+
+.quiz { background: var(--surface); border: 2px solid var(--accent); border-radius: 10px; padding: 16px; display: flex; flex-direction: column; gap: 14px; }
+.qgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; }
+.qitem { display: flex; flex-direction: column; gap: 6px; }
+.qitem .lab { font: 600 12px var(--font-body); }
+.qopts { display: flex; flex-wrap: wrap; gap: 6px; }
+.qopts .chip.right { background: var(--ok-bg); color: var(--ok); border-color: var(--ok); }
+.qopts .chip.wrong { background: var(--bad-bg); color: var(--bad); border-color: var(--bad); }
+.qresult { font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+.qresult p { margin: 0; }
+.qactions { display: flex; flex-wrap: wrap; gap: 8px; }
+
+.notes { display: grid; grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); gap: 14px; }
+.note { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px 16px; }
+.note h3 { font: 700 1.1rem/1.1 var(--font-display); margin: 0 0 8px; letter-spacing: .02em; }
+.note ul { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.note li { max-width: 65ch; }
+
+@media (max-width: 900px) {
+  .layout { grid-template-columns: minmax(0,1fr); }
+  .rail { position: static; }
+  .summary { grid-template-columns: repeat(2, minmax(0,1fr)); }
+  .grade-cell { grid-column: 1 / -1; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="top">
+    <div>
+      <h1>VExUS <span>Simulator</span></h1>
+      <p>Change right atrial pressure, rhythm and pitfalls, then watch the hepatic, portal and intrarenal venous Doppler respond.</p>
+    </div>
+    <div class="qactions">
+      <button class="btn primary" id="quizBtn" type="button">Mystery patient quiz</button>
+    </div>
+  </header>
+
+  <section class="summary" aria-label="Current findings">
+    <div class="cell"><span class="lab">IVC max diameter</span><span class="val" id="sumIvc">2.5 cm</span><span class="pill na" id="sumIvcPill">Over 2 cm</span></div>
+    <div class="cell"><span class="lab">Hepatic vein</span><span class="val" id="sumHvTxt">S reversal</span><span class="pill" id="sumHv">Severe</span></div>
+    <div class="cell"><span class="lab">Portal vein PVPF</span><span class="val" id="sumPvTxt">41%</span><span class="pill" id="sumPv">Mild</span></div>
+    <div class="cell"><span class="lab">Intrarenal vein</span><span class="val" id="sumIrvTxt">Biphasic</span><span class="pill" id="sumIrv">Mild</span></div>
+    <div class="cell grade-cell"><span class="grade-num" id="gradeNum">2</span><span class="grade-text" id="gradeText"><strong>VExUS grade 2</strong>One severe waveform</span></div>
+  </section>
+
+  <div class="notesbox" id="notes" hidden></div>
+
+  <section class="quiz" id="quizPanel" hidden aria-label="Mystery patient quiz">
+    <h2>Mystery patient</h2>
+    <p class="hint" id="quizStem">Read each scope, then grade every waveform and the overall VExUS grade.</p>
+    <div class="qgrid" id="quizItems"></div>
+    <div class="qresult" id="quizResult"></div>
+    <div class="qactions">
+      <button class="btn primary" id="quizCheck" type="button">Check answers</button>
+      <button class="btn" id="quizNew" type="button">New patient</button>
+      <button class="btn" id="quizExit" type="button">Exit quiz</button>
+    </div>
+  </section>
+
+  <div class="layout">
+    <aside class="rail" id="rail">
+      <h2>Patient</h2>
+      <div class="group">
+        <span class="lab">Scenarios</span>
+        <div class="chips" id="presets"></div>
+      </div>
+      <div class="group">
+        <div class="slider-row">
+          <div class="top"><label for="rap">Right atrial pressure</label><output id="rapOut">15 mmHg</output></div>
+          <input type="range" id="rap" min="2" max="25" step="1" value="15">
+        </div>
+        <div class="slider-row">
+          <div class="top"><label for="ivc">IVC max diameter</label><output id="ivcOut">2.5 cm</output></div>
+          <input type="range" id="ivc" min="1.0" max="3.0" step="0.1" value="2.5">
+        </div>
+      </div>
+      <div class="group">
+        <span class="lab">Rhythm</span>
+        <div class="seg" id="rhythm"><button type="button" data-v="sinus" class="on">Sinus</button><button type="button" data-v="af">Atrial fibrillation</button></div>
+      </div>
+      <div class="group">
+        <span class="lab">Pitfalls</span>
+        <label class="toggle"><input type="checkbox" id="cirr"> Cirrhosis or fatty liver</label>
+        <label class="toggle"><input type="checkbox" id="tr"> Severe structural TR</label>
+        <label class="toggle"><input type="checkbox" id="lean"> Lean individual or athlete</label>
+      </div>
+      <div class="group">
+        <label class="lab" for="sweep">Sweep speed</label>
+        <select id="sweep">
+          <option value="25">25 mm/s</option>
+          <option value="50" selected>50 mm/s</option>
+          <option value="66.7">66.7 mm/s</option>
+          <option value="100">100 mm/s</option>
+        </select>
+        <p class="hint">Use 50 or 66.7 mm/s for VExUS waveforms.</p>
+      </div>
+    </aside>
+
+    <div class="scopes">
+      <section class="scope" id="scope-hv">
+        <div class="scope-head">
+          <div class="title-block"><h3>Hepatic vein</h3><span class="sub">Right coronal view, PW gate 1 to 2 cm from the HV to IVC junction</span></div>
+          <div class="head-right"><span class="cdot"><i style="background:var(--doppler-blue)"></i>Normal color: blue, away from probe</span><span class="pill" id="hvPill">Severe</span></div>
+        </div>
+        <div class="screen"><canvas id="cv-hv"></canvas><span class="tag">HV  PW  antegrade below baseline</span><span class="calip" id="hvCal"></span></div>
+        <div class="scope-foot">
+          <div class="slider-row"><div class="top"><label for="sc-hv">Velocity scale (Nyquist)</label><output id="sc-hv-out">40 cm/s</output></div><input type="range" id="sc-hv" min="10" max="100" step="5" value="40"></div>
+          <span class="warnline" id="hvWarn"></span>
+        </div>
+      </section>
+
+      <section class="scope" id="scope-pv">
+        <div class="scope-head">
+          <div class="title-block"><h3>Portal vein</h3><span class="sub">Coronal view, gate distal in the main portal vein, away from hepatic artery aliasing</span></div>
+          <div class="head-right"><span class="cdot"><i style="background:var(--doppler-red)"></i>Normal color: red, toward probe</span><span class="pill" id="pvPill">Mild</span></div>
+        </div>
+        <div class="screen"><canvas id="cv-pv"></canvas><span class="tag">PV  PW  hepatopetal above baseline</span><span class="calip" id="pvCal"></span></div>
+        <div class="scope-foot">
+          <div class="slider-row"><div class="top"><label for="sc-pv">Velocity scale (Nyquist)</label><output id="sc-pv-out">40 cm/s</output></div><input type="range" id="sc-pv" min="10" max="100" step="5" value="40"></div>
+          <span class="warnline" id="pvWarn"></span>
+        </div>
+      </section>
+
+      <section class="scope" id="scope-irv">
+        <div class="scope-head">
+          <div class="title-block"><h3>Intrarenal vein</h3><span class="sub">Coronal view, gate on an interlobar vessel, abdominal preset</span></div>
+          <div class="head-right"><span class="cdot"><i style="background:var(--doppler-red)"></i>Artery red</span><span class="cdot"><i style="background:var(--doppler-blue)"></i>Vein blue</span><span class="pill" id="irvPill">Mild</span></div>
+        </div>
+        <div class="screen"><canvas id="cv-irv"></canvas><span class="tag">IRA above  IRV below baseline</span><span class="calip" id="irvCal"></span></div>
+        <div class="scope-foot">
+          <div class="slider-row"><div class="top"><label for="sc-irv">Velocity scale (Nyquist)</label><output id="sc-irv-out">15 cm/s</output></div><input type="range" id="sc-irv" min="5" max="60" step="5" value="15"></div>
+          <span class="warnline" id="irvWarn"></span>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <section class="notes" aria-label="Teaching points">
+    <div class="note">
+      <h3>Hepatic vein</h3>
+      <ul>
+        <li>A and V are retrograde (above baseline); S and D are antegrade (below).</li>
+        <li>A follows the P wave, S follows the QRS, V is end systole, D follows the T wave.</li>
+        <li>Normal S &gt; D. Mild: S &lt; D, still below baseline. Severe: S reversed above baseline.</li>
+        <li>Pitfalls: AF causes S &lt; D without high RAP. Cirrhosis blunts phasicity. Structural TR keeps S reversed even after decongestion.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>Portal vein</h3>
+      <ul>
+        <li>Normal flow is continuous and toward the probe (red), because sinusoids dampen RAP.</li>
+        <li>PVPF = (Vmax &minus; Vmin) / Vmax &times; 100.</li>
+        <li>Under 30% normal, 30 to 50% mild, 50% or more severe.</li>
+        <li>Pitfalls: lean people and athletes can be pulsatile normally; cirrhosis can raise or mask pulsatility.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>Intrarenal vein</h3>
+      <ul>
+        <li>Use interlobar veins, abdominal preset, scale below 20 cm/s.</li>
+        <li>Normal: continuous. Mild: biphasic with distinct S and D. Severe: monophasic, D only.</li>
+        <li>The arterial waveform above baseline times the cardiac cycle.</li>
+        <li>Hardest view to obtain; not studied in CKD or renal transplant.</li>
+      </ul>
+    </div>
+    <div class="note">
+      <h3>Grading</h3>
+      <ul>
+        <li>IVC 2 cm or less: grade 0, Doppler not graded.</li>
+        <li>IVC over 2 cm and no severe waveform: grade 1.</li>
+        <li>One severe waveform: grade 2. Two or more: grade 3.</li>
+        <li>VExUS shows congestion, not volume responsiveness. Interpret with cardiac POCUS and the clinical picture.</li>
+      </ul>
+    </div>
+  </section>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var S = { rap: 15, ivc: 2.5, af: false, cirr: false, tr: false, lean: false, sweep: 50, scales: { hv: 40, pv: 40, irv: 15 } };
+  var quiz = null;
+
+  var PRESETS = [
+    { id: "euv", name: "Euvolemic", s: { rap: 5, ivc: 1.6, af: false, cirr: false, tr: false, lean: false } },
+    { id: "g1", name: "Grade 1", s: { rap: 11, ivc: 2.3, af: false, cirr: false, tr: false, lean: false } },
+    { id: "g2", name: "Grade 2", s: { rap: 15, ivc: 2.5, af: false, cirr: false, tr: false, lean: false } },
+    { id: "g3", name: "Grade 3", s: { rap: 21, ivc: 2.8, af: false, cirr: false, tr: false, lean: false } },
+    { id: "af", name: "AF pitfall", pit: true, s: { rap: 6, ivc: 2.2, af: true, cirr: false, tr: false, lean: false } },
+    { id: "cirr", name: "Cirrhosis pitfall", pit: true, s: { rap: 16, ivc: 2.4, af: false, cirr: true, tr: false, lean: false } },
+    { id: "tr", name: "Structural TR", pit: true, s: { rap: 12, ivc: 2.6, af: false, cirr: false, tr: true, lean: false } },
+    { id: "lean", name: "Lean athlete", pit: true, s: { rap: 5, ivc: 2.3, af: false, cirr: false, tr: false, lean: true } }
+  ];
+
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function g(x, c, w) { var d = (x - c) / w; return Math.exp(-d * d); }
+
+  function derive(st) {
+    var hvL = st.rap <= 8 ? 0 : st.rap <= 14 ? 1 : 2;
+    if (st.tr) hvL = 2;
+    var hvDisp;
+    if (st.cirr) hvDisp = "blunted";
+    else if (hvL === 0 && st.af) hvDisp = "mild";
+    else hvDisp = ["normal", "mild", "severe"][hvL];
+    var p = clamp(0.12 + (st.rap - 5) * 0.029, 0.08, 0.9);
+    if (st.lean) p = Math.max(p, 0.12) + 0.22;
+    if (st.cirr) p = p * 0.45;
+    p = clamp(p, 0.05, 0.95);
+    var pvMean = st.cirr ? 12 : 22;
+    var k = p / (2 - p);
+    var pvMax = pvMean * (1 + k), pvMin = pvMean * (1 - k);
+    var pvp = Math.round((pvMax - pvMin) / pvMax * 100);
+    var pvCat = pvp < 30 ? "normal" : pvp < 50 ? "mild" : "severe";
+    var irvL = st.rap <= 9 ? 0 : st.rap <= 16 ? 1 : 2;
+    var irvCat = ["normal", "mild", "severe"][irvL];
+    var severe = (hvDisp === "severe" ? 1 : 0) + (pvCat === "severe" ? 1 : 0) + (irvCat === "severe" ? 1 : 0);
+    var grade = st.ivc <= 2.0 ? 0 : severe === 0 ? 1 : severe === 1 ? 2 : 3;
+    var notes = [];
+    if (st.af) notes.push("<strong>Atrial fibrillation:</strong> the A wave is gone and S can be smaller than D without a high RAP. Grade the hepatic vein cautiously and lean on the portal and intrarenal veins.");
+    if (st.cirr) notes.push("<strong>Cirrhosis or fatty liver:</strong> the hepatic vein waveform is blunted with lost phasicity, and portal pulsatility may be masked despite a high RAP. Compare with prior imaging if available.");
+    if (st.tr) notes.push("<strong>Severe structural TR:</strong> S reversal can persist and may not improve with volume removal. It still means congestion, but it is a poor guide for deresuscitation.");
+    if (st.lean) notes.push("<strong>Lean individual or athlete:</strong> portal pulsatility can rise without a high RAP, and athletes may have a dilated IVC at normal pressure.");
+    if (st.ivc <= 2.0) notes.push("<strong>IVC 2 cm or less:</strong> VExUS grade 0. The Doppler scopes still run so you can see them, but they are not graded. Consider a circular, plethoric short axis IVC in smaller patients.");
+    return { hvL: hvL, hvDisp: hvDisp, pvp: pvp, pvCat: pvCat, pvMean: pvMean, k: k, pvMax: pvMax, pvMin: pvMin, irvL: irvL, irvCat: irvCat, grade: grade, severe: severe, notes: notes };
+  }
+
+  var D = derive(S);
+
+  function hvVel(ph) {
+    var L = S.tr ? 2 : D.hvL;
+    var A = S.af ? 0 : [12, 18, 20][L];
+    var Sw = [-36, -16, 20][L];
+    var V = [-4, 6, 10][L];
+    var Dw = [-24, -32, -36][L];
+    if (S.af && L === 0) { Sw = -15; Dw = -27; }
+    var v;
+    if (L === 2 && !S.af) {
+      v = 22 * g(ph, 0.29, 0.12) + Dw * g(ph, 0.66, 0.07);
+    } else if (L === 2) {
+      v = 20 * g(ph, 0.33, 0.10) + Dw * g(ph, 0.66, 0.07);
+    } else {
+      v = A * g(ph, 0.12, 0.045) + Sw * g(ph, 0.30, 0.07) + V * g(ph, 0.47, 0.035) + Dw * g(ph, 0.64, 0.07);
+    }
+    if (S.cirr) v = -18 + 0.15 * (v + 14);
+    return v;
+  }
+  function pvVel(ph) { return D.pvMean * (1 + D.k * Math.cos(2 * Math.PI * (ph - 0.85))); }
+  function irvArt(ph) { return 4 + 8.5 * g(ph, 0.27, 0.055) + 1.5 * g(ph, 0.45, 0.12); }
+  function lobe(ph, c, hw) { var d = (ph - c) / hw; return Math.abs(d) < 1 ? Math.pow(Math.cos(d * Math.PI / 2), 0.7) : 0; }
+  function irvVen(ph) {
+    if (D.irvL === 0) return -8 + 0.8 * Math.sin(2 * Math.PI * ph);
+    if (D.irvL === 1) return -(9 * lobe(ph, 0.33, 0.11) + 11 * lobe(ph, 0.70, 0.13));
+    return -(13 * lobe(ph, 0.70, 0.15));
+  }
+  function ecg(ph, t) {
+    var v = 0;
+    if (!S.af) v += 0.15 * g(ph, 0.06, 0.025);
+    else v += 0.04 * Math.sin(2 * Math.PI * 7.3 * t) + 0.03 * Math.sin(2 * Math.PI * 5.1 * t + 1.3);
+    v += -0.12 * g(ph, 0.145, 0.01) + 1.0 * g(ph, 0.16, 0.012) - 0.25 * g(ph, 0.177, 0.011);
+    v += 0.28 * g(ph, 0.42, 0.045);
+    return v;
+  }
+
+  var beat = { t0: 0, rr: 0.8 };
+  var simT = 0;
+  function nextRR() { return S.af ? 0.5 + Math.random() * 0.6 : 0.8; }
+  function phaseAt(t) {
+    while (t >= beat.t0 + beat.rr) { beat = { t0: beat.t0 + beat.rr, rr: nextRR() }; }
+    return (t - beat.t0) / beat.rr;
+  }
+
+  var css = getComputedStyle(document.documentElement);
+  function tok(n) { return css.getPropertyValue(n).trim(); }
+  var COLORS = {};
+  function readColors() {
+    css = getComputedStyle(document.documentElement);
+    COLORS = { bg: tok("--scope-bg"), line: tok("--scope-line"), text: tok("--scope-text"), base: tok("--scope-baseline"), ecg: tok("--scope-ecg") };
+  }
+  readColors();
+
+  var LABEL_W = 38;
+  function Scope(kind, canvas, baseFrac) {
+    this.kind = kind; this.cv = canvas; this.ctx = canvas.getContext("2d"); this.baseFrac = baseFrac;
+    this.x = 0; this.prevEcgY = null; this.resize();
+  }
+  Scope.prototype.resize = function () {
+    var dpr = window.devicePixelRatio || 1;
+    var w = Math.max(200, this.cv.clientWidth), h = this.cv.clientHeight || 240;
+    this.cv.width = Math.round(w * dpr); this.cv.height = Math.round(h * dpr);
+    this.ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    this.w = w; this.h = h; this.hs = h - 58; this.sweepW = w - LABEL_W;
+    this.clearAll();
+  };
+  Scope.prototype.scale = function () { return S.scales[this.kind]; };
+  Scope.prototype.baseY = function () { return Math.round(this.hs * this.baseFrac) + 0.5; };
+  Scope.prototype.pxPer = function () { return (this.hs / 2) / this.scale(); };
+  Scope.prototype.limits = function () {
+    var by = this.baseY(), pp = this.pxPer();
+    return { up: by / pp, down: (this.hs - by) / pp };
+  };
+  Scope.prototype.yOf = function (v) { return this.baseY() - v * this.pxPer(); };
+  Scope.prototype.clearAll = function () {
+    var c = this.ctx;
+    c.fillStyle = COLORS.bg; c.fillRect(0, 0, this.w, this.h);
+    c.fillStyle = COLORS.line; c.fillRect(0, this.hs + 1, this.w, 1);
+    this.x = 0; this.prevEcgY = null;
+    this.drawLabels();
+  };
+  Scope.prototype.ticks = function () {
+    var sc = this.scale(), step = sc <= 20 ? 5 : sc <= 50 ? 10 : 20, L = this.limits(), out = [];
+    for (var v = -Math.floor(L.down / step) * step; v <= L.up; v += step) { if (v !== 0) out.push(v); }
+    return out;
+  };
+  Scope.prototype.drawLabels = function () {
+    var c = this.ctx, x0 = this.sweepW;
+    c.fillStyle = COLORS.bg; c.fillRect(x0, 0, LABEL_W, this.h);
+    c.fillStyle = COLORS.line; c.fillRect(x0, 0, 1, this.hs);
+    c.font = "500 10px " + tok("--font-mono");
+    c.fillStyle = COLORS.text; c.textAlign = "left"; c.textBaseline = "middle";
+    var t = this.ticks(), self = this;
+    t.forEach(function (v) {
+      var y = self.yOf(v);
+      if (y < 6 || y > self.hs - 4) return;
+      c.fillRect(x0, Math.round(y), 4, 1);
+      c.fillText(String(v), x0 + 6, y);
+    });
+    c.fillStyle = COLORS.base; c.fillText("0", x0 + 6, this.baseY());
+    c.fillStyle = COLORS.text; c.fillText("cm/s", x0 + 4, this.hs - 8);
+    c.fillText("ECG", x0 + 6, this.hs + 29);
+  };
+  function wrapV(v, L) {
+    var total = L.up + L.down;
+    if (v > L.up) return { a: true, v: v - total };
+    if (v < -L.down) return { a: true, v: v + total };
+    return { a: false, v: v };
+  }
+  Scope.prototype.fillSpectral = function (x, v, L) {
+    var c = this.ctx, by = this.baseY(), self = this;
+    function seg(y1, y2, envY) {
+      var top = Math.max(0, Math.min(y1, y2)), bot = Math.min(self.hs, Math.max(y1, y2));
+      for (var y = top; y < bot; y += 2) {
+        var near = Math.abs(y - envY) < 5 ? 0.25 : 0;
+        var a = 0.25 + Math.random() * 0.55 + near;
+        c.fillStyle = "rgba(232,238,244," + a.toFixed(2) + ")";
+        c.fillRect(x, y, 1, 2);
+      }
+    }
+    var w = wrapV(v, L);
+    if (!w.a) { var y = this.yOf(v); seg(by, y, y); }
+    else if (v > 0) { seg(by, 0, 0); var yw = this.yOf(w.v); seg(this.hs, yw, yw); }
+    else { seg(by, this.hs, this.hs); var yw2 = this.yOf(w.v); seg(0, yw2, yw2); }
+  };
+  Scope.prototype.column = function (ph, t) {
+    var c = this.ctx, x = this.x, L = this.limits();
+    c.fillStyle = COLORS.bg;
+    c.fillRect(x, 0, Math.min(8, this.sweepW - x), this.h);
+    c.fillStyle = COLORS.line; c.fillRect(x, this.hs + 1, 1, 1);
+    var tk = this.ticks(), self = this;
+    if (x % 4 === 0) tk.forEach(function (v) { var y = self.yOf(v); if (y > 0 && y < self.hs) c.fillRect(x, Math.round(y), 1, 1); });
+    if (this.kind === "hv") this.fillSpectral(x, hvVel(ph) + (Math.random() - 0.5) * 1.5, L);
+    else if (this.kind === "pv") this.fillSpectral(x, pvVel(ph) + (Math.random() - 0.5) * 1.5, L);
+    else { this.fillSpectral(x, irvArt(ph) + (Math.random() - 0.5), L); var vv = irvVen(ph); if (vv < -0.2) this.fillSpectral(x, vv + (Math.random() - 0.5) * 0.3, L); }
+    c.fillStyle = COLORS.base; c.fillRect(x, Math.floor(this.baseY()), 1, 1);
+    var ey = this.hs + 34 - ecg(ph, t) * 20;
+    c.strokeStyle = COLORS.ecg; c.lineWidth = 1.4;
+    if (this.prevEcgY !== null && x > 0) { c.beginPath(); c.moveTo(x - 1, this.prevEcgY); c.lineTo(x, ey); c.stroke(); }
+    this.prevEcgY = ey;
+    this.x = x + 1;
+    if (this.x >= this.sweepW) { this.x = 0; this.prevEcgY = null; }
+  };
+
+  var scopes = [
+    new Scope("hv", document.getElementById("cv-hv"), 0.36),
+    new Scope("pv", document.getElementById("cv-pv"), 0.74),
+    new Scope("irv", document.getElementById("cv-irv"), 0.5)
+  ];
+
+  var reduce = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  var last = null, acc = 0;
+  function pxPerSec() { return S.sweep * 3.2; }
+  function step(n) {
+    for (var i = 0; i < n; i++) {
+      simT += 1 / pxPerSec();
+      var ph = phaseAt(simT);
+      for (var j = 0; j < scopes.length; j++) scopes[j].column(ph, simT);
+    }
+  }
+  function frame(ts) {
+    if (last === null) last = ts;
+    var dt = Math.min(0.1, (ts - last) / 1000); last = ts;
+    acc += dt * pxPerSec();
+    var n = Math.floor(acc); acc -= n;
+    if (n > 0) step(n);
+    requestAnimationFrame(frame);
+  }
+  function prefill() { var n = Math.floor(scopes[0].sweepW * 0.92); step(n); }
+  prefill();
+  if (!reduce) requestAnimationFrame(frame);
+
+  var $ = function (id) { return document.getElementById(id); };
+  var LABEL = { normal: "Normal", mild: "Mildly abnormal", severe: "Severely abnormal", blunted: "Blunted" };
+  function setPill(el, cat, hide) {
+    el.className = "pill " + (hide ? "na" : (cat === "blunted" ? "na" : cat));
+    el.textContent = hide ? "?" : LABEL[cat];
+  }
+  function peakInfo(kind) {
+    var mx = -1e9, mn = 1e9;
+    for (var i = 0; i <= 200; i++) {
+      var ph = i / 200, vals;
+      if (kind === "hv") vals = [hvVel(ph)];
+      else if (kind === "pv") vals = [pvVel(ph)];
+      else vals = [irvArt(ph), irvVen(ph)];
+      vals.forEach(function (v) { if (v > mx) mx = v; if (v < mn) mn = v; });
+    }
+    return { mx: mx, mn: mn };
+  }
+  function warn(kind) {
+    var sc = scopes.filter(function (s) { return s.kind === kind; })[0];
+    var L = sc.limits(), P = peakInfo(kind), el = $(kind + "Warn");
+    var big = Math.max(Math.abs(P.mx), Math.abs(P.mn));
+    if (P.mx > L.up || -P.mn > L.down) { el.className = "warnline b"; el.textContent = "Aliasing: the signal wraps around. Raise the scale."; }
+    else if (kind === "irv" && S.scales.irv > 20) { el.className = "warnline w"; el.textContent = "Scale above 20 cm/s. Slow intrarenal flow may disappear."; }
+    else if (big < 0.3 * S.scales[kind]) { el.className = "warnline w"; el.textContent = "Waveform is small. Lower the scale to enlarge it."; }
+    else { el.className = "warnline o"; el.textContent = "Scale is well matched to this flow."; }
+  }
+
+  function render() {
+    D = derive(S);
+    var hide = !!quiz && !quiz.checked;
+    $("rap").value = S.rap; $("rapOut").textContent = hide ? "?" : S.rap + " mmHg";
+    $("ivc").value = S.ivc; $("ivcOut").textContent = S.ivc.toFixed(1) + " cm";
+    $("cirr").checked = S.cirr; $("tr").checked = S.tr; $("lean").checked = S.lean;
+    Array.prototype.forEach.call($("rhythm").children, function (b) { b.classList.toggle("on", (b.dataset.v === "af") === S.af); });
+
+    $("sumIvc").textContent = S.ivc.toFixed(1) + " cm";
+    var plet = S.ivc > 2.0;
+    $("sumIvcPill").className = "pill " + (plet ? "mild" : "normal");
+    $("sumIvcPill").textContent = plet ? "Over 2 cm" : "2 cm or less";
+
+    var hvTxt = { normal: "S > D", mild: "S < D", severe: "S reversal", blunted: "Blunted" }[D.hvDisp];
+    var irvTxt = ["Continuous", "Biphasic S, D", "D only"][D.irvL];
+    $("sumHvTxt").textContent = hide ? "?" : hvTxt;
+    $("sumPvTxt").textContent = hide ? "?" : D.pvp + "%";
+    $("sumIrvTxt").textContent = hide ? "?" : irvTxt;
+    setPill($("sumHv"), D.hvDisp, hide); setPill($("sumPv"), D.pvCat, hide); setPill($("sumIrv"), D.irvCat, hide);
+    setPill($("hvPill"), D.hvDisp, hide); setPill($("pvPill"), D.pvCat, hide); setPill($("irvPill"), D.irvCat, hide);
+
+    var gn = $("gradeNum");
+    gn.textContent = hide ? "?" : D.grade;
+    gn.className = "grade-num g" + (hide ? 0 : D.grade);
+    var gdesc = ["No congestion (IVC 2 cm or less)", "No severe waveform", "One severe waveform", "Two or more severe waveforms"][D.grade];
+    $("gradeText").innerHTML = hide ? "<strong>VExUS grade ?</strong>Grade it in the quiz" : "<strong>VExUS grade " + D.grade + "</strong>" + gdesc;
+
+    $("hvCal").textContent = "";
+    $("pvCal").textContent = "Vmax " + D.pvMax.toFixed(0) + "  Vmin " + D.pvMin.toFixed(0) + " cm/s" + (hide ? "" : "   PVPF " + D.pvp + "%");
+    $("irvCal").textContent = "";
+
+    var nb = $("notes");
+    if (D.notes.length && !hide) { nb.innerHTML = D.notes.map(function (n) { return "<div>" + n + "</div>"; }).join(""); nb.hidden = false; }
+    else nb.hidden = true;
+
+    ["hv", "pv", "irv"].forEach(function (k) {
+      $("sc-" + k).value = S.scales[k];
+      $("sc-" + k + "-out").textContent = S.scales[k] + " cm/s";
+      warn(k);
+    });
+    Array.prototype.forEach.call($("presets").children, function (b) { b.classList.remove("on"); });
+    var rail = $("rail");
+    rail.querySelectorAll("input, button, select").forEach(function (el) { if (el.id !== "sweep") el.disabled = !!quiz && !quiz.checked; });
+  }
+
+  PRESETS.forEach(function (p) {
+    var b = document.createElement("button");
+    b.type = "button"; b.className = "chip" + (p.pit ? " pit" : ""); b.textContent = p.name;
+    b.addEventListener("click", function () {
+      Object.assign(S, p.s); beat.rr = nextRR(); render();
+      Array.prototype.forEach.call($("presets").children, function (c) { c.classList.remove("on"); });
+      b.classList.add("on");
+    });
+    $("presets").appendChild(b);
+  });
+  $("rap").addEventListener("input", function (e) { S.rap = +e.target.value; render(); });
+  $("ivc").addEventListener("input", function (e) { S.ivc = +e.target.value; render(); });
+  $("cirr").addEventListener("change", function (e) { S.cirr = e.target.checked; render(); });
+  $("tr").addEventListener("change", function (e) { S.tr = e.target.checked; render(); });
+  $("lean").addEventListener("change", function (e) { S.lean = e.target.checked; render(); });
+  $("rhythm").addEventListener("click", function (e) {
+    var b = e.target.closest("button"); if (!b) return;
+    S.af = b.dataset.v === "af"; beat.rr = nextRR(); render();
+  });
+  $("sweep").addEventListener("change", function (e) { S.sweep = +e.target.value; scopes.forEach(function (s) { s.clearAll(); }); if (reduce) prefill(); });
+  ["hv", "pv", "irv"].forEach(function (k) {
+    $("sc-" + k).addEventListener("input", function (e) {
+      S.scales[k] = +e.target.value;
+      var sc = scopes.filter(function (s) { return s.kind === k; })[0];
+      sc.clearAll(); render();
+      if (reduce) { prefill(); }
+    });
+  });
+
+  var rt;
+  window.addEventListener("resize", function () { clearTimeout(rt); rt = setTimeout(function () { scopes.forEach(function (s) { s.resize(); }); if (reduce) prefill(); }, 150); });
+
+  var QUIZ_POOL = ["euv", "g1", "g2", "g3", "g3", "af", "tr", "lean", "g2", "g1"];
+  var QITEMS = [
+    { key: "hv", label: "Hepatic vein", opts: [["normal", "Normal, S > D"], ["mild", "Mild, S < D"], ["severe", "Severe, S reversal"]] },
+    { key: "pv", label: "Portal vein (use Vmax and Vmin)", opts: [["normal", "Under 30%"], ["mild", "30 to 50%"], ["severe", "50% or more"]] },
+    { key: "irv", label: "Intrarenal vein", opts: [["normal", "Continuous"], ["mild", "Biphasic S, D"], ["severe", "Monophasic D only"]] },
+    { key: "grade", label: "VExUS grade", opts: [["0", "0"], ["1", "1"], ["2", "2"], ["3", "3"]] }
+  ];
+  function buildQuiz() {
+    var wrap = $("quizItems"); wrap.innerHTML = "";
+    QITEMS.forEach(function (q) {
+      var d = document.createElement("div"); d.className = "qitem";
+      d.innerHTML = '<span class="lab">' + q.label + '</span><div class="qopts"></div>';
+      var box = d.querySelector(".qopts");
+      q.opts.forEach(function (o) {
+        var b = document.createElement("button"); b.type = "button"; b.className = "chip"; b.textContent = o[1]; b.dataset.v = o[0];
+        b.addEventListener("click", function () {
+          if (quiz.checked) return;
+          quiz.chosen[q.key] = o[0];
+          Array.prototype.forEach.call(box.children, function (c) { c.classList.toggle("on", c === b); });
+        });
+        box.appendChild(b);
+      });
+      d.dataset.key = q.key;
+      wrap.appendChild(d);
+    });
+    $("quizResult").innerHTML = "";
+  }
+  function newPatient() {
+    var id = QUIZ_POOL[Math.floor(Math.random() * QUIZ_POOL.length)];
+    var p = PRESETS.filter(function (x) { return x.id === id; })[0];
+    Object.assign(S, p.s);
+    S.scales = { hv: 40, pv: 40, irv: 15 };
+    beat.rr = nextRR();
+    quiz = { id: id, chosen: {}, checked: false };
+    buildQuiz();
+    $("quizStem").textContent = "IVC max diameter is " + S.ivc.toFixed(1) + " cm" + (S.af ? ", rhythm is irregular" : "") + ". Read each scope, then grade every waveform and the overall VExUS grade.";
+    $("quizCheck").disabled = false;
+    scopes.forEach(function (s) { s.clearAll(); }); prefill();
+    render();
+  }
+  function checkQuiz() {
+    var ans = { hv: D.hvDisp, pv: D.pvCat, irv: D.irvCat, grade: String(D.grade) };
+    var right = 0;
+    Array.prototype.forEach.call($("quizItems").children, function (d) {
+      var k = d.dataset.key;
+      Array.prototype.forEach.call(d.querySelectorAll(".chip"), function (c) {
+        c.classList.remove("on");
+        if (c.dataset.v === ans[k]) c.classList.add("right");
+        else if (c.dataset.v === quiz.chosen[k]) c.classList.add("wrong");
+      });
+      if (quiz.chosen[k] === ans[k]) right++;
+    });
+    quiz.checked = true;
+    var why = [];
+    why.push("<p><strong>" + right + " of 4 correct.</strong></p>");
+    why.push("<p>Hepatic vein: " + { normal: "S is larger than D, both below baseline.", mild: "S is smaller than D but still below baseline.", severe: "S is reversed above the baseline, only D stays below." }[ans.hv] + "</p>");
+    why.push("<p>Portal vein: PVPF = (" + D.pvMax.toFixed(0) + " &minus; " + D.pvMin.toFixed(0) + ") / " + D.pvMax.toFixed(0) + " &times; 100 = " + D.pvp + "%.</p>");
+    why.push("<p>Intrarenal vein: " + ["continuous flow below baseline.", "distinct S and D waves with gaps (biphasic).", "a single D wave per beat (monophasic D only)."][D.irvL] + "</p>");
+    why.push("<p>Grade: " + (D.grade === 0 ? "IVC is 2 cm or less, so grade 0 regardless of Doppler." : "IVC over 2 cm with " + D.severe + " severe waveform" + (D.severe === 1 ? "" : "s") + ", so grade " + D.grade + ".") + "</p>");
+    D.notes.forEach(function (n) { if (n.indexOf("IVC 2 cm") === -1) why.push("<p>" + n + "</p>"); });
+    $("quizResult").innerHTML = why.join("");
+    $("quizCheck").disabled = true;
+    render();
+  }
+  $("quizBtn").addEventListener("click", function () { $("quizPanel").hidden = false; newPatient(); $("quizPanel").scrollIntoView({ behavior: reduce ? "auto" : "smooth", block: "start" }); });
+  $("quizNew").addEventListener("click", newPatient);
+  $("quizCheck").addEventListener("click", checkQuiz);
+  $("quizExit").addEventListener("click", function () { quiz = null; $("quizPanel").hidden = true; render(); });
+
+  function postHeight() { try { if (window.parent !== window) window.parent.postMessage({ labHeight: document.documentElement.scrollHeight, lab: "vexus-sim" }, "*"); } catch (e) {} }
+  if (window.ResizeObserver) new ResizeObserver(postHeight).observe(document.body);
+  window.addEventListener("load", postHeight);
+
+  render();
+  var g2 = $("presets").children[2]; if (g2) g2.classList.add("on");
+})();
+</script>
+</body>
+</html>
