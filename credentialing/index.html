@@ -1,0 +1,537 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>POCUS Credentialing Dashboard</title>
+<!--
+  HOW TO UPDATE (admin)
+  Option A (easiest): set CONFIG.sheetCsvUrl to a Google Sheet published as CSV
+     (File > Share > Publish to web > choose the tab > CSV). Edit the sheet; the dashboard updates on reload.
+     Columns: name, pgy, lung, cardiac, vascular, abdominal, clips, presentation, handson, quiz, note
+  Option B: edit the RESIDENTS list below and re-upload this file to GitHub.
+  Then change CONFIG.lastUpdated.
+-->
+<style>
+  :root{
+    --bg:#f7f5f2; --panel:#ffffff; --ink:#1d1d1f; --muted:#6b6b70; --line:#e6e2dc; --soft:#f1ede7;
+    --accent:#990000; --accent-soft:#f6e6e6; --gold:#c99a2e; --gold-soft:#fbf3df;
+    --lung:#0f9b8e; --cardiac:#c8102e; --vascular:#4f46e5; --abdominal:#d97706;
+    --ok:#15803d; --ok-soft:#e5f4ea; --warn:#b45309; --warn-soft:#fdf1e1; --bad:#b91c1c; --bad-soft:#fbe9e9;
+    --track:#ebe7e1; --shadow:0 1px 2px rgba(0,0,0,.05),0 4px 14px rgba(0,0,0,.05);
+  }
+  :root[data-theme="dark"]{
+    --bg:#16161a; --panel:#1f1f24; --ink:#f2f2f4; --muted:#a3a3ab; --line:#2f2f36; --soft:#26262c;
+    --accent:#e0565b; --accent-soft:#3a2224; --gold:#e5bd5c; --gold-soft:#3a3120;
+    --track:#2e2e35; --ok-soft:#1d3326; --warn-soft:#3a2d1a; --bad-soft:#3a1f1f; --shadow:none;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;background:var(--bg);color:var(--ink);
+    font:15px/1.45 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif}
+  .wrap{max-width:1120px;margin:0 auto;padding:20px 16px 32px}
+  button{font:inherit;color:inherit}
+  a{color:var(--accent)}
+
+  /* Hero */
+  .hero{background:linear-gradient(135deg,#7a0000,#990000 55%,#b3262b);color:#fff;border-radius:18px;padding:22px 22px 18px;position:relative;overflow:hidden}
+  .hero:after{content:"";position:absolute;right:-60px;top:-60px;width:240px;height:240px;border-radius:50%;
+    border:28px solid rgba(255,255,255,.07)}
+  .eyebrow{font-size:12px;letter-spacing:.12em;text-transform:uppercase;opacity:.8}
+  .hero h1{margin:4px 0 2px;font-size:26px;line-height:1.15}
+  .hero .sub{opacity:.85;font-size:14px}
+  .chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:10px}
+  .chip{font-size:12px;padding:3px 9px;border-radius:999px;background:rgba(255,255,255,.14)}
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-top:16px;position:relative;z-index:1}
+  .stat{background:rgba(255,255,255,.1);border-radius:12px;padding:10px 12px}
+  .stat b{display:block;font-size:24px;line-height:1.1}
+  .stat span{font-size:12px;opacity:.85}
+
+  /* Cohort mix */
+  .mix{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0 4px}
+  .mixc{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:10px 12px;box-shadow:var(--shadow)}
+  .mixc .lab{display:flex;justify-content:space-between;font-size:13px;color:var(--muted)}
+  .mixc .num{font-size:20px;font-weight:700}
+  .mixc .lead{font-size:12px;color:var(--muted);margin-top:2px}
+  .bar{height:8px;border-radius:99px;background:var(--track);overflow:hidden;margin-top:6px}
+  .bar i{display:block;height:100%;border-radius:99px}
+
+  /* Toolbar */
+  .toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin:18px 0 12px}
+  .toolbar h2{font-size:18px;margin:0 auto 0 0}
+  .seg{display:inline-flex;background:var(--soft);border-radius:10px;padding:3px}
+  .seg button{border:0;background:transparent;padding:6px 11px;border-radius:8px;cursor:pointer;font-size:13px;color:var(--muted)}
+  .seg button.on{background:var(--panel);color:var(--ink);box-shadow:var(--shadow);font-weight:600}
+  input[type=search],select{font:inherit;font-size:13px;padding:7px 10px;border-radius:10px;border:1px solid var(--line);background:var(--panel);color:var(--ink)}
+  input[type=search]{width:170px}
+
+  /* Cards */
+  .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:12px}
+  .card{all:unset;box-sizing:border-box;cursor:pointer;background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:14px;display:flex;flex-direction:column;align-items:center;text-align:center;gap:8px;box-shadow:var(--shadow);
+    transition:transform .15s,border-color .15s}
+  .card:hover,.card:focus-visible{transform:translateY(-2px);border-color:var(--accent)}
+  .card.open{border-color:var(--accent);outline:2px solid var(--accent-soft)}
+  .card.cred{background:linear-gradient(180deg,var(--gold-soft),var(--panel) 60%);border-color:var(--gold)}
+  .name{font-weight:700;font-size:15px}
+  .meta{font-size:12px;color:var(--muted)}
+  .dots{display:flex;gap:5px}
+  .dot{width:22px;height:6px;border-radius:99px;background:var(--track)}
+  .dot.done{background:var(--accent)} .dot.part{background:linear-gradient(90deg,var(--accent) 50%,var(--track) 50%)}
+  .cred .dot.done{background:var(--gold)}
+  .pill{font-size:11.5px;font-weight:600;padding:3px 9px;border-radius:99px}
+  .p-ok{background:var(--ok-soft);color:var(--ok)} .p-warn{background:var(--warn-soft);color:var(--warn)}
+  .p-bad{background:var(--bad-soft);color:var(--bad)} .p-gold{background:var(--gold-soft);color:#8a6510}
+  :root[data-theme="dark"] .p-gold{color:var(--gold)}
+  .p-new{background:var(--soft);color:var(--muted)}
+
+  /* Detail */
+  .detail{grid-column:1/-1;background:var(--panel);border:1px solid var(--accent);border-radius:18px;padding:18px;
+    position:relative;overflow:hidden;box-shadow:var(--shadow);animation:pop .22s ease}
+  @keyframes pop{from{opacity:0;transform:translateY(-6px)}to{opacity:1;transform:none}}
+  .dhead{display:flex;align-items:center;gap:12px;flex-wrap:wrap}
+  .dhead h3{margin:0;font-size:20px}
+  .x{margin-left:auto;border:0;background:var(--soft);border-radius:10px;width:34px;height:34px;cursor:pointer;font-size:18px}
+  .dgrid{display:grid;grid-template-columns:230px 1fr 1fr;gap:20px;margin-top:14px}
+  .sec h4{margin:0 0 8px;font-size:12px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+  .legend{display:grid;grid-template-columns:1fr 1fr;gap:4px 10px;font-size:12px;margin-top:8px}
+  .legend span:before{content:"";display:inline-block;width:9px;height:9px;border-radius:3px;margin-right:5px;background:var(--c)}
+  .cat{margin-bottom:11px}
+  .cat .row{display:flex;justify-content:space-between;font-size:13px}
+  .cat .row b{font-weight:600}
+  .cat .togo{font-size:12px;color:var(--muted)}
+  .cat .bar{height:10px;position:relative}
+  .step{display:flex;gap:10px;padding:7px 0;position:relative}
+  .step:not(:last-child):before{content:"";position:absolute;left:13px;top:34px;bottom:-4px;width:2px;background:var(--track)}
+  .step.done:not(:last-child):before{background:var(--accent)}
+  .ico{flex:0 0 28px;height:28px;border-radius:50%;display:grid;place-items:center;font-size:13px;font-weight:700;
+    background:var(--track);color:var(--muted)}
+  .step.done .ico{background:var(--accent);color:#fff}
+  .step.part .ico{background:var(--accent-soft);color:var(--accent);border:2px solid var(--accent)}
+  .step .t{font-size:14px;font-weight:600}
+  .step .s{font-size:12.5px;color:var(--muted)}
+  .medal{display:inline-block;font-size:11px;font-weight:700;padding:1px 7px;border-radius:99px;margin-left:4px;vertical-align:1px}
+  .m-Silver{background:#e7e9ee;color:#4b5563} .m-Gold{background:#fbefc9;color:#8a6510} .m-Platinum{background:#dfeef3;color:#1f5b6e}
+  .next{margin:0;padding-left:18px;font-size:13.5px}
+  .next li{margin-bottom:4px}
+  .note{margin-top:10px;font-size:13px;background:var(--soft);border-radius:10px;padding:8px 10px}
+  .pace svg{width:100%;height:auto;display:block}
+  .pace p{font-size:13px;margin:6px 0 0}
+  .confetti{position:absolute;inset:0;pointer-events:none}
+  .confetti i{position:absolute;top:-10px;width:7px;height:11px;border-radius:2px;animation:fall 2.4s ease-in forwards}
+  @keyframes fall{to{transform:translateY(560px) rotate(540deg);opacity:0}}
+  .banner{display:flex;gap:8px;align-items:center;background:var(--gold-soft);border:1px solid var(--gold);color:var(--ink);
+    border-radius:12px;padding:10px 12px;font-size:13px;margin-top:12px}
+
+  /* Table */
+  .tblwrap{overflow-x:auto;background:var(--panel);border:1px solid var(--line);border-radius:16px;box-shadow:var(--shadow)}
+  table{border-collapse:collapse;width:100%;font-size:13px;min-width:720px}
+  th,td{padding:9px 10px;text-align:center;border-bottom:1px solid var(--line)}
+  th{font-size:11.5px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);font-weight:600;background:var(--soft)}
+  th:first-child,td:first-child{text-align:left}
+  tbody tr.r{cursor:pointer} tbody tr.r:hover td{background:var(--soft)}
+  td.h{font-weight:600;color:var(--ink)}
+  td.dt{padding:0;border:0} td.dt .detail{border-radius:0;border-width:0 0 1px 0;text-align:left}
+
+  /* Requirements */
+  .reqs{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px;margin-top:6px}
+  details{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:12px 14px;box-shadow:var(--shadow)}
+  summary{cursor:pointer;font-weight:600;list-style:none;display:flex;gap:10px;align-items:center}
+  summary::-webkit-details-marker{display:none}
+  summary .ico{background:var(--accent);color:#fff}
+  details[open] summary{margin-bottom:6px}
+  details p,details ul{font-size:13.5px;margin:6px 0 0;color:var(--muted)}
+  details ul{padding-left:18px}
+  .foot{font-size:12px;color:var(--muted);text-align:center;margin-top:22px}
+  .empty{padding:30px;text-align:center;color:var(--muted)}
+
+  @media (max-width:820px){
+    .dgrid{grid-template-columns:1fr}
+    .ringbox{display:flex;flex-direction:column;align-items:center}
+    .stats,.mix{grid-template-columns:repeat(2,1fr)}
+    .toolbar h2{width:100%}
+    input[type=search]{flex:1;min-width:0}
+  }
+  @media (max-width:440px){ .grid{grid-template-columns:repeat(2,1fr);gap:8px} .card{padding:10px} .hero h1{font-size:22px} }
+</style>
+</head>
+<body>
+<div class="wrap" id="app"></div>
+
+<script>
+/* ============================== EDIT HERE ============================== */
+const CONFIG = {
+  title: "POCUS Credentialing Dashboard",
+  program: "IU Internal Medicine Residency",
+  academicYear: "2026-27",
+  ayStart: "2026-07-01",
+  signoffBy: "2027-05-31",          // target date for hands-on sign-off / quiz
+  lastUpdated: "2026-10-29",
+  sheetCsvUrl: "",                    // optional: published Google Sheet CSV link
+  showSampleBanner: false,             // set false once real data is in
+  theme: "light",                     // "light", "dark" or "auto"
+  scanLogUrl: "https://www.pulmonarypocus.com/s/POCUS_Credentialing_Scan_Log.xlsx",
+  contact: "pulmonarypocus@gmail.com",
+  req: { lung:25, cardiac:50, vascular:25, abdominal:50, total:150, clips:15, quizPass:70 }
+};
+
+/* presentation: "", "In progress", "Silver", "Gold" or "Platinum"
+   handson: true/false     quiz: percent score, or null if not taken          */
+const RESIDENTS = [
+  {name:"Resident 1", pgy:null, lung:0, cardiac:0, vascular:0, abdominal:0, clips:0, presentation:"", handson:false, quiz:null, note:""},
+  {name:"Resident 2", pgy:null, lung:0, cardiac:0, vascular:0, abdominal:0, clips:0, presentation:"", handson:false, quiz:null, note:""},
+  {name:"Resident 3", pgy:null, lung:0, cardiac:0, vascular:0, abdominal:0, clips:0, presentation:"", handson:false, quiz:null, note:""},
+  {name:"Resident 4", pgy:null, lung:0, cardiac:0, vascular:0, abdominal:0, clips:0, presentation:"", handson:false, quiz:null, note:""},
+  {name:"Resident 5", pgy:null, lung:0, cardiac:0, vascular:0, abdominal:0, clips:0, presentation:"", handson:false, quiz:null, note:""},
+  {name:"Resident 6", pgy:null, lung:0, cardiac:0, vascular:0, abdominal:0, clips:0, presentation:"", handson:false, quiz:null, note:""}
+];
+/* ======================================================================= */
+
+const R = CONFIG.req;
+const CATS = [
+  {k:"lung",      label:"Lung",      full:"Lung",                      min:R.lung,      color:"var(--lung)"},
+  {k:"cardiac",   label:"Cardiac",   full:"Cardiac",                   min:R.cardiac,   color:"var(--cardiac)"},
+  {k:"vascular",  label:"Vascular",  full:"Vascular",                  min:R.vascular,  color:"var(--vascular)"},
+  {k:"abdominal", label:"Abdominal", full:"Abdominal (incl. VExUS)",   min:R.abdominal, color:"var(--abdominal)"}
+];
+const SUM_MIN = CATS.reduce((s,c)=>s+c.min,0);
+const TIERS = ["Silver","Gold","Platinum"];
+const DAY = 864e5;
+
+let data = [], view = "cards", sortBy = "progress", pgyFilter = "all", query = "", openIdx = null;
+
+/* ---------- helpers ---------- */
+const $ = (s,el=document)=>el.querySelector(s);
+const esc = s => String(s ?? "").replace(/[&<>"']/g, c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const pd = s => { const [y,m,d] = String(s).split("-").map(Number); return new Date(y, m-1, d); };
+const fmt = d => d.toLocaleDateString("en-US",{month:"short",day:"numeric",year:"numeric"});
+const pct = f => Math.round(f*100);
+const truthy = v => v === true || /^(y|yes|true|1|x|done)$/i.test(String(v).trim());
+
+function normalize(r){
+  const quizRaw = r.quiz === null || r.quiz === undefined || String(r.quiz).trim()==="" ? null : parseFloat(r.quiz);
+  let pres = String(r.presentation || "").trim();
+  const t = TIERS.find(x => x.toLowerCase() === pres.toLowerCase());
+  if (t) pres = t; else if (/progress|draft|submitted|pending/i.test(pres)) pres = "In progress"; else pres = pres ? "In progress" : "";
+  return {
+    name: String(r.name || "").trim() || "Resident",
+    pgy: parseInt(r.pgy) || null,
+    lung:+r.lung||0, cardiac:+r.cardiac||0, vascular:+r.vascular||0, abdominal:+r.abdominal||0,
+    clips: +r.clips || 0, presentation: pres, handson: truthy(r.handson), quiz: isNaN(quizRaw) ? null : quizRaw,
+    note: String(r.note || "").trim()
+  };
+}
+
+function compute(r){
+  const counts = CATS.map(c => ({...c, n:r[c.k], f:Math.min(r[c.k]/c.min,1)}));
+  const total = counts.reduce((s,c)=>s+c.n,0);
+  const credited = counts.reduce((s,c)=>s+Math.min(c.n,c.min),0);
+  const scanFrac = (Math.min(total,R.total)/R.total + credited/SUM_MIN)/2;
+  const scansDone = total >= R.total && counts.every(c=>c.n>=c.min);
+  const clipFrac = Math.min(r.clips/R.clips,1);
+  const presDone = TIERS.includes(r.presentation);
+  const presFrac = presDone ? 1 : r.presentation ? .4 : 0;
+  const quizDone = r.quiz !== null && r.quiz >= R.quizPass;
+  const quizFrac = quizDone ? 1 : 0;
+  const hands = r.handson ? 1 : 0;
+  const overall = .5*(scansDone?1:scanFrac) + .15*clipFrac + .15*presFrac + .1*hands + .1*quizFrac;
+  const steps = [
+    {k:"scans", t:"150 logged scans", done:scansDone, part:total>0, s: scansDone ? `${total} scans, all minimums met` : `${total} of ${R.total} logged`},
+    {k:"clips", t:"Short Clip Challenge CME", done:r.clips>=R.clips, part:r.clips>0, s:`${Math.min(r.clips,R.clips)} of ${R.clips} credits`},
+    {k:"pres", t:"Presentation or publication", done:presDone, part:!!r.presentation,
+      s: presDone ? `Completed <span class="medal m-${r.presentation}">${r.presentation}</span>` : r.presentation ? "In progress" : "Not started"},
+    {k:"hands", t:"Hands-on sign-off", done:r.handson, part:false, s: r.handson ? "Signed off" : "End of year"},
+    {k:"quiz", t:`Final quiz (${R.quizPass}% to pass)`, done:quizDone, part:r.quiz!==null,
+      s: r.quiz===null ? "Not taken" : quizDone ? `Passed, ${r.quiz}%` : `${r.quiz}%, retake needed`}
+  ];
+  const doneCount = steps.filter(s=>s.done).length;
+  const credentialed = doneCount === steps.length;
+
+  // pace
+  const start = pd(CONFIG.ayStart), target = pd(CONFIG.signoffBy), today = new Date();
+  const elapsed = Math.max(1,(today-start)/DAY);
+  const perWeek = total/elapsed*7;
+  const remaining = Math.max(0, R.total-total);
+  const weeksLeft = Math.max(.5,(target-today)/DAY/7);
+  const neededPerWeek = remaining/weeksLeft;
+  let projected = null, pace;
+  if (scansDone) pace = {cls:credentialed?"p-gold":"p-ok", txt:credentialed?"Credentialed":"Scan goal met"};
+  else if (total===0) pace = {cls:"p-new", txt:"Not started"};
+  else {
+    projected = new Date(today.getTime() + remaining/(total/elapsed)*DAY);
+    if (projected <= target) pace = {cls:"p-ok", txt:"On track"};
+    else if (projected <= new Date(target.getTime()+45*DAY)) pace = {cls:"p-warn", txt:"Pick up pace"};
+    else pace = {cls:"p-bad", txt:"Behind"};
+  }
+  return {...r, counts, total, overall, steps, doneCount, credentialed, scansDone, perWeek, neededPerWeek, remaining, projected, pace, start, target, today};
+}
+
+/* ---------- SVG ---------- */
+function polar(cx,cy,r,a){ const t=(a-90)*Math.PI/180; return [cx+r*Math.cos(t), cy+r*Math.sin(t)]; }
+function arc(cx,cy,r,a0,a1){
+  if (a1-a0 < .3) return "";
+  const [x0,y0]=polar(cx,cy,r,a0), [x1,y1]=polar(cx,cy,r,a1);
+  return `M${x0.toFixed(2)} ${y0.toFixed(2)} A${r} ${r} 0 ${a1-a0>180?1:0} 1 ${x1.toFixed(2)} ${y1.toFixed(2)}`;
+}
+function ring(st, size){
+  const c=50, r=40, sw=9, gap=5; let a=0, p="";
+  st.counts.forEach(k=>{
+    const span = 360*k.min/SUM_MIN, a0=a+gap/2, a1=a+span-gap/2;
+    p += `<path d="${arc(c,c,r,a0,a1)}" stroke="var(--track)" stroke-width="${sw}" fill="none"/>`;
+    p += `<path d="${arc(c,c,r,a0,a0+(a1-a0)*k.f)}" stroke="${k.color}" stroke-width="${sw}" fill="none"><title>${k.label}: ${k.n}/${k.min}</title></path>`;
+    a += span;
+  });
+  const halo = st.credentialed ? `<circle cx="50" cy="50" r="48" fill="none" stroke="var(--gold)" stroke-width="2" stroke-dasharray="2 3"/>` : "";
+  const center = st.credentialed
+    ? `<text x="50" y="47" text-anchor="middle" font-size="17" fill="var(--gold)">&#9733;</text><text x="50" y="62" text-anchor="middle" font-size="9.5" font-weight="700" fill="var(--ink)">DONE</text>`
+    : `<text x="50" y="54" text-anchor="middle" font-size="19" font-weight="800" fill="var(--ink)">${pct(st.overall)}%</text><text x="50" y="66" text-anchor="middle" font-size="7.5" fill="var(--muted)">overall</text>`;
+  return `<svg viewBox="0 0 100 100" width="${size}" height="${size}" role="img" aria-label="${pct(st.overall)} percent complete">${halo}${p}${center}</svg>`;
+}
+function paceChart(st){
+  const W=320,H=150,L=30,Rr=10,T=12,B=24, end=new Date(Math.max(st.target, st.projected||0, st.today)+10*DAY);
+  const x = d => L + (d-st.start)/(end-st.start)*(W-L-Rr);
+  const ymax = Math.max(R.total, st.total)*1.08;
+  const y = v => H-B - v/ymax*(H-T-B);
+  let s = `<svg viewBox="0 0 ${W} ${H}" role="img" aria-label="Scan pace chart">`;
+  [0,50,100,150].forEach(v=>{ s+=`<line x1="${L}" x2="${W-Rr}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)"/><text x="${L-5}" y="${y(v)+3}" font-size="9" text-anchor="end" fill="var(--muted)">${v}</text>`; });
+  s += `<line x1="${L}" x2="${W-Rr}" y1="${y(R.total)}" y2="${y(R.total)}" stroke="var(--accent)" stroke-dasharray="4 3"/>`;
+  s += `<line x1="${x(st.target)}" x2="${x(st.target)}" y1="${T}" y2="${H-B}" stroke="var(--muted)" stroke-dasharray="2 3"/><text x="${x(st.target)}" y="${H-8}" font-size="9" text-anchor="middle" fill="var(--muted)">Target</text>`;
+  s += `<text x="${L}" y="${H-8}" font-size="9" fill="var(--muted)">Jul</text>`;
+  // ideal line
+  s += `<line x1="${x(st.start)}" y1="${y(0)}" x2="${x(st.target)}" y2="${y(R.total)}" stroke="var(--track)" stroke-width="2"/>`;
+  if (st.projected && !st.scansDone) s += `<line x1="${x(st.today)}" y1="${y(st.total)}" x2="${x(st.projected)}" y2="${y(R.total)}" stroke="var(--accent)" stroke-width="2" stroke-dasharray="5 4" opacity=".6"/>`;
+  s += `<path d="M${x(st.start)} ${y(0)} L${x(st.today)} ${y(st.total)} L${x(st.today)} ${y(0)}Z" fill="var(--accent)" opacity=".1"/>`;
+  s += `<line x1="${x(st.start)}" y1="${y(0)}" x2="${x(st.today)}" y2="${y(st.total)}" stroke="var(--accent)" stroke-width="2.5"/>`;
+  s += `<circle cx="${x(st.today)}" cy="${y(st.total)}" r="4.5" fill="var(--accent)"/><text x="${x(st.today)}" y="${y(st.total)-9}" font-size="10" font-weight="700" text-anchor="middle" fill="var(--ink)">${st.total}</text>`;
+  return s + `</svg>`;
+}
+
+/* ---------- next steps ---------- */
+function nextSteps(st){
+  const out = [];
+  if (st.credentialed) return ["All five milestones complete. Congratulations, you are POCUS credentialed!"];
+  const short = st.counts.filter(c=>c.n<c.min).sort((a,b)=>(b.min-b.n)/b.min-(a.min-a.n)/a.min);
+  if (short.length) out.push(`Focus on <b>${short[0].label.toLowerCase()}</b>: ${short[0].min-short[0].n} more to reach the minimum.`);
+  if (short.length>1) out.push(`Still needed: ${short.slice(1).map(c=>`${c.min-c.n} ${c.label.toLowerCase()}`).join(", ")}.`);
+  if (!short.length && st.total < R.total) out.push(`Minimums met. Log ${R.total-st.total} more scans in any category.`);
+  if (!st.scansDone && st.total>0) out.push(`Aim for about <b>${Math.ceil(st.neededPerWeek)} scan${Math.ceil(st.neededPerWeek)===1?"":"s"} per week</b> to finish by ${fmt(st.target)}.`);
+  if (st.clips < R.clips) out.push(`Complete ${R.clips-st.clips} more Short Clip Challenge credit${R.clips-st.clips===1?"":"s"}.`);
+  if (!st.presentation) out.push("Pick a case or topic for your presentation or publication.");
+  if (st.scansDone && !st.handson) out.push("Schedule your hands-on sign-off.");
+  if (st.handson && !(st.quiz>=R.quizPass)) out.push(st.quiz===null ? "Take the 20-question final quiz." : "Retake the final quiz.");
+  return out.slice(0,4);
+}
+
+/* ---------- render ---------- */
+function shell(){
+  document.getElementById("app").innerHTML = `
+    <header class="hero">
+      <div class="eyebrow">Pulmonary POCUS &middot; ${esc(CONFIG.program)}</div>
+      <h1>${esc(CONFIG.title)}</h1>
+      <div class="sub">Academic year ${esc(CONFIG.academicYear)} &middot; Updated ${fmt(pd(CONFIG.lastUpdated))}</div>
+      <div class="chips" id="srcchip"></div>
+      <div class="stats" id="stats"></div>
+    </header>
+    ${CONFIG.showSampleBanner ? `<div class="banner">&#9888;&#65039; Showing sample data. Replace it with your cohort before going live.</div>` : ""}
+    <div class="mix" id="mix"></div>
+    <div class="toolbar">
+      <h2>Resident progress</h2>
+      <input type="search" id="q" placeholder="Find a resident" aria-label="Search residents">
+      <div class="seg" id="pgy"><button data-v="all" class="on">All</button><button data-v="1">PGY-1</button><button data-v="2">PGY-2</button><button data-v="3">PGY-3</button></div>
+      <select id="sort" aria-label="Sort by">
+        <option value="progress">Sort: progress</option><option value="scans">Sort: scans</option>
+        <option value="pace">Sort: pace</option><option value="name">Sort: name</option>
+      </select>
+      <div class="seg" id="view"><button data-v="cards" class="on">Cards</button><button data-v="table">Heatmap</button></div>
+    </div>
+    <div id="list"></div>
+    <div class="toolbar"><h2>The pathway</h2></div>
+    <div class="reqs">${reqCards()}</div>
+    <div class="foot">Tap any resident to see their full progress. Questions or corrections: <a href="mailto:${CONFIG.contact}">${CONFIG.contact}</a></div>`;
+  $("#q").addEventListener("input", e=>{ query=e.target.value.toLowerCase(); openIdx=null; renderList(); });
+  $("#sort").addEventListener("change", e=>{ sortBy=e.target.value; openIdx=null; renderList(); });
+  segment("#pgy", v=>{ pgyFilter=v; openIdx=null; renderList(); });
+  segment("#view", v=>{ view=v; renderList(); });
+}
+function segment(sel, cb){
+  $(sel).addEventListener("click", e=>{
+    const b = e.target.closest("button"); if(!b) return;
+    $(sel).querySelectorAll("button").forEach(x=>x.classList.toggle("on", x===b)); cb(b.dataset.v);
+  });
+}
+function reqCards(){
+  const items = [
+    ["1","150 logged scans",`<p>Minimums by category:</p><ul>${CATS.map(c=>`<li>${c.full}: ${c.min}</li>`).join("")}</ul><p>Log every scan in the <a href="${CONFIG.scanLogUrl}">POCUS Credentialing Scan Log</a>.</p>`],
+    ["2","Short Clip Challenge",`<p>Earn ${R.clips} CME credits from the weekly Short Clip Challenge.</p>`],
+    ["3","Presentation or publication",`<p>One POCUS presentation or publication. Recognized as <span class="medal m-Silver">Silver</span> <span class="medal m-Gold">Gold</span> or <span class="medal m-Platinum">Platinum</span> by authorship role (see the Resident Guide).</p>`],
+    ["4","Hands-on sign-off",`<p>Supervised image acquisition with faculty at the end of the year.</p>`],
+    ["5","Final quiz",`<p>20 questions. Score ${R.quizPass}% or higher to pass.</p>`]
+  ];
+  return items.map(([n,t,b])=>`<details><summary><span class="ico">${n}</span>${t}</summary>${b}</details>`).join("");
+}
+
+function renderTop(){
+  const all = data.map(compute);
+  const scans = all.reduce((s,r)=>s+r.total,0);
+  const cred = all.filter(r=>r.credentialed).length;
+  const onTrack = all.filter(r=>["On track","Scan goal met","Credentialed"].includes(r.pace.txt)).length;
+  const avg = all.length ? all.reduce((s,r)=>s+r.overall,0)/all.length : 0;
+  $("#stats").innerHTML = [
+    [all.length,"Residents enrolled"],[scans.toLocaleString(),"Scans logged"],[`${onTrack}/${all.length}`,"On pace"],[cred,"Credentialed"]
+  ].map(([b,s])=>`<div class="stat"><b>${b}</b><span>${s}</span></div>`).join("");
+  $("#mix").innerHTML = CATS.map(c=>{
+    const n = all.reduce((s,r)=>s+r[c.k],0), need = c.min*all.length;
+    const top = all.slice().sort((a,b)=>b[c.k]-a[c.k])[0];
+    return `<div class="mixc"><div class="lab"><span>${c.label}</span><span>${pct(Math.min(n/need,1))}%</span></div>
+      <div class="num">${n}</div><div class="bar"><i style="width:${Math.min(n/need,1)*100}%;background:${c.color}"></i></div>
+      <div class="lead">${top && top[c.k] ? `Leader: ${esc(top.name)} (${top[c.k]})` : "No scans yet"}</div></div>`;
+  }).join("");
+}
+
+function filtered(){
+  let list = data.map((r,i)=>({...compute(r), i}));
+  if (pgyFilter!=="all") list = list.filter(r=>String(r.pgy)===pgyFilter);
+  if (query) list = list.filter(r=>r.name.toLowerCase().includes(query));
+  const paceRank = r => r.credentialed?0 : r.scansDone?1 : r.projected ? r.projected.getTime() : 9e15;
+  const sorters = {
+    progress:(a,b)=>b.overall-a.overall, scans:(a,b)=>b.total-a.total,
+    pace:(a,b)=>paceRank(a)-paceRank(b), name:(a,b)=>a.name.localeCompare(b.name)
+  };
+  return list.sort(sorters[sortBy]);
+}
+
+function renderList(){
+  const list = filtered(), box = $("#list");
+  if (!list.length){ box.innerHTML = `<div class="empty">No residents match.</div>`; post(); return; }
+  if (view==="cards"){
+    box.innerHTML = `<div class="grid">${list.map(st=>`
+      <button class="card ${st.credentialed?"cred":""}" data-i="${st.i}" aria-expanded="false">
+        ${ring(st,104)}
+        <div><div class="name">${esc(st.name)}</div><div class="meta">${st.pgy?`PGY-${st.pgy} &middot; `:""}${st.total} scans &middot; ${st.doneCount}/5 milestones</div></div>
+        <div class="dots">${st.steps.map(s=>`<span class="dot ${s.done?"done":s.part?"part":""}" title="${esc(s.t)}"></span>`).join("")}</div>
+        <span class="pill ${st.pace.cls}">${st.pace.txt}</span>
+      </button>`).join("")}</div>`;
+    box.querySelectorAll(".card").forEach(c=>c.addEventListener("click",()=>toggleCard(+c.dataset.i,c)));
+    if (openIdx!==null){ const c = box.querySelector(`.card[data-i="${openIdx}"]`); openIdx=null; if(c) toggleCard(+c.dataset.i,c,true); }
+  } else {
+    const cell = (f,color,txt) => `<td style="background:color-mix(in srgb, ${color} ${Math.round(f*55)}%, transparent)" class="${f>=1?"h":""}">${txt}</td>`;
+    box.innerHTML = `<div class="tblwrap"><table><thead><tr><th>Resident</th>${CATS.map(c=>`<th>${c.label}<br><span style="font-weight:400">/${c.min}</span></th>`).join("")}
+      <th>Total</th><th>Clips</th><th>Present.</th><th>Hands-on</th><th>Quiz</th><th>Overall</th></tr></thead><tbody>
+      ${list.map(st=>`<tr class="r" data-i="${st.i}"><td><b>${esc(st.name)}</b>${st.pgy?` <span class="meta">PGY-${st.pgy}</span>`:""}</td>
+        ${st.counts.map(c=>cell(c.f,c.color,c.n)).join("")}
+        ${cell(Math.min(st.total/R.total,1),"var(--accent)",st.total)}
+        ${cell(Math.min(st.clips/R.clips,1),"var(--accent)",st.clips)}
+        <td>${TIERS.includes(st.presentation)?`<span class="medal m-${st.presentation}">${st.presentation}</span>`:st.presentation?"In prog.":"&middot;"}</td>
+        <td>${st.handson?"&#10003;":"&middot;"}</td><td>${st.quiz===null?"&middot;":st.quiz+"%"}</td>
+        <td><span class="pill ${st.credentialed?"p-gold":"p-new"}">${st.credentialed?"&#9733; Done":pct(st.overall)+"%"}</span></td></tr>`).join("")}
+      </tbody></table></div>`;
+    box.querySelectorAll("tr.r").forEach(tr=>tr.addEventListener("click",()=>toggleRow(+tr.dataset.i,tr)));
+  }
+  post();
+}
+
+function detail(st){
+  const el = document.createElement("div");
+  el.className = "detail";
+  const proj = st.scansDone ? "Scan requirement complete."
+    : st.total===0 ? "No scans logged yet. Download the scan log to get started."
+    : `Averaging <b>${st.perWeek.toFixed(1)} scans/week</b>. At this pace you reach 150 by <b>${fmt(st.projected)}</b>.`;
+  el.innerHTML = `
+    <div class="dhead"><h3>${esc(st.name)}</h3>${st.pgy?`<span class="pill p-new">PGY-${st.pgy}</span>`:""}<span class="pill ${st.pace.cls}">${st.pace.txt}</span>
+      <button class="x" aria-label="Close">&times;</button></div>
+    <div class="dgrid">
+      <div class="sec ringbox"><h4>Scan wheel</h4>${ring(st,200)}
+        <div class="legend">${st.counts.map(c=>`<span style="--c:${c.color}">${c.label} ${c.n}</span>`).join("")}</div></div>
+      <div class="sec"><h4>Scans by category</h4>
+        ${st.counts.map(c=>`<div class="cat"><div class="row"><b>${c.full}</b><span>${c.n} / ${c.min}</span></div>
+          <div class="bar"><i style="width:${c.f*100}%;background:${c.color}"></i></div>
+          <div class="togo">${c.n>=c.min ? `Minimum met${c.n>c.min?`, +${c.n-c.min} extra`:""}` : `${c.min-c.n} to go`}</div></div>`).join("")}
+        <h4 style="margin-top:14px">Pace</h4>
+        <div class="pace">${paceChart(st)}<p>${proj}</p></div>
+      </div>
+      <div class="sec"><h4>Milestones</h4>
+        ${st.steps.map((s,i)=>`<div class="step ${s.done?"done":s.part?"part":""}"><span class="ico">${s.done?"&#10003;":i+1}</span>
+          <div><div class="t">${s.t}</div><div class="s">${s.s}</div></div></div>`).join("")}
+        <h4 style="margin-top:12px">Next best steps</h4>
+        <ul class="next">${nextSteps(st).map(n=>`<li>${n}</li>`).join("")}</ul>
+        ${st.note?`<div class="note">&#128221; ${esc(st.note)}</div>`:""}
+      </div>
+    </div>`;
+  if (st.credentialed){
+    const cf = document.createElement("div"); cf.className="confetti";
+    const cols = ["#990000","#c99a2e","#0f9b8e","#4f46e5","#d97706"];
+    for (let k=0;k<46;k++){ const i=document.createElement("i");
+      i.style.left = Math.random()*100+"%"; i.style.background = cols[k%cols.length];
+      i.style.animationDelay = Math.random()*.6+"s"; i.style.transform = `rotate(${Math.random()*180}deg)`; cf.appendChild(i); }
+    el.appendChild(cf); setTimeout(()=>cf.remove(),3200);
+  }
+  return el;
+}
+
+function closeOpen(){
+  document.querySelectorAll(".detail").forEach(d=>{ const tr=d.closest("tr"); tr ? tr.remove() : d.remove(); });
+  document.querySelectorAll(".card.open").forEach(c=>{ c.classList.remove("open"); c.setAttribute("aria-expanded","false"); });
+}
+function toggleCard(i, card, force){
+  const was = openIdx===i && !force; closeOpen(); openIdx=null;
+  if (was){ post(); return; }
+  openIdx = i; card.classList.add("open"); card.setAttribute("aria-expanded","true");
+  const cards = [...card.parentElement.querySelectorAll(".card")];
+  let last = card; cards.forEach(c=>{ if (c.offsetTop===card.offsetTop) last=c; });
+  const d = detail(compute(data[i])); last.after(d);
+  d.querySelector(".x").addEventListener("click",e=>{ e.stopPropagation(); closeOpen(); openIdx=null; post(); card.focus(); });
+  post(); if(!force) setTimeout(()=>d.scrollIntoView({behavior:"smooth",block:"nearest"}),60);
+}
+function toggleRow(i, tr){
+  const was = openIdx===i; closeOpen(); openIdx=null;
+  if (was){ post(); return; }
+  openIdx = i;
+  const row = document.createElement("tr"), td = document.createElement("td");
+  td.colSpan = tr.children.length; td.className="dt"; const d = detail(compute(data[i])); td.appendChild(d); row.appendChild(td); tr.after(row);
+  d.querySelector(".x").addEventListener("click",()=>{ closeOpen(); openIdx=null; post(); });
+  post();
+}
+
+/* ---------- data loading ---------- */
+function parseCSV(text){
+  const rows=[]; let row=[], f="", q=false;
+  for (let i=0;i<text.length;i++){
+    const ch=text[i];
+    if (q){ if(ch==='"'){ if(text[i+1]==='"'){f+='"';i++;} else q=false; } else f+=ch; }
+    else if (ch==='"') q=true;
+    else if (ch===','){ row.push(f); f=""; }
+    else if (ch==='\n'||ch==='\r'){ if(ch==='\r'&&text[i+1]==='\n') i++; row.push(f); rows.push(row); row=[]; f=""; }
+    else f+=ch;
+  }
+  if (f||row.length){ row.push(f); rows.push(row); }
+  const head = rows.shift().map(h=>h.trim().toLowerCase().replace(/[^a-z]/g,""));
+  const alias = {resident:"name", hands:"handson", handsonsignoff:"handson", shortclip:"clips", shortclips:"clips", cme:"clips", abdomen:"abdominal", abd:"abdominal", cardio:"cardiac", heart:"cardiac", notes:"note"};
+  return rows.filter(r=>r.some(c=>c.trim())).map(r=>{ const o={}; head.forEach((h,j)=>o[alias[h]||h]=r[j]); return o; });
+}
+async function load(){
+  let source = "Embedded data";
+  if (CONFIG.sheetCsvUrl){
+    try{
+      const res = await fetch(CONFIG.sheetCsvUrl + (CONFIG.sheetCsvUrl.includes("?")?"&":"?") + "t=" + Date.now());
+      if(!res.ok) throw 0;
+      data = parseCSV(await res.text()).map(normalize).filter(r=>r.name);
+      source = "Live from Google Sheet";
+    }catch(e){ data = RESIDENTS.map(normalize); source = "Sheet unavailable, showing saved data"; }
+  } else data = RESIDENTS.map(normalize);
+  $("#srcchip").innerHTML = `<span class="chip">${source}</span><span class="chip">Target sign-off ${fmt(pd(CONFIG.signoffBy))}</span>`;
+  renderTop(); renderList();
+}
+
+/* ---------- Squarespace iframe auto-height ---------- */
+function post(){
+  const h = Math.ceil(document.documentElement.scrollHeight);
+  try{ parent.postMessage({labHeight:h, lab:"credentialing", credentialingHeight:h}, "*"); }catch(e){}
+}
+if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
+window.addEventListener("load", post);
+
+const theme = CONFIG.theme==="auto" ? (matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light") : CONFIG.theme;
+document.documentElement.setAttribute("data-theme", theme);
+shell(); load();
+</script>
+</body>
+</html>
