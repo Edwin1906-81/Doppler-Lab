@@ -513,11 +513,8 @@ function toggleRow(i, tr){
 }
 
 /* ---------- resident upload ---------- */
-const LOG_TABS = [ // tab, category, review-date col, assessment col (rows 8-107, row 7 is the example)
-  {tab:"Lung-Thoracic", k:"lung",      rev:"O", agr:"P"},
-  {tab:"Cardiac",       k:"cardiac",   rev:"S", agr:"T"},
-  {tab:"Vascular",      k:"vascular",  rev:"O", agr:"P"},
-  {tab:"VeXUS",         k:"abdominal", rev:"P", agr:"Q"}
+const LOG_TABS = [ // tab, category. Columns are found by header name in row 6 (rows 8-107; row 7 is the example)
+  {tab:"Lung-Thoracic", k:"lung"}, {tab:"Cardiac", k:"cardiac"}, {tab:"Vascular", k:"vascular"}, {tab:"VeXUS", k:"abdominal"}
 ];
 let parsed = null;
 function uploadPanel(){
@@ -543,10 +540,14 @@ function parseLog(wb){
   let found = 0;
   LOG_TABS.forEach(t=>{
     const ws = wb.Sheets[t.tab]; out[t.k]=0; if(!ws) return; found++;
+    const col = {};
+    for (let c=0;c<40;c++){ const a=XLSX.utils.encode_col(c), h=String(cell(ws,a+"6")||"").toLowerCase().replace(/\s+/g," ").trim();
+      if (h.startsWith("date of study")) col.d=a; else if (h.startsWith("review date")) col.rev=a; else if (h.startsWith("reviewer assessment")) col.agr=a; }
+    col.d = col.d || "B";
     for (let r=8;r<=107;r++){
-      if (isDate(cell(ws,"B"+r))) out[t.k]++;
-      if (isDate(cell(ws,t.rev+r))) out.reviewed++;
-      if (String(cell(ws,t.agr+r)||"").trim().toLowerCase()==="agree") out.concordant++;
+      if (isDate(cell(ws,col.d+r))) out[t.k]++;
+      if (col.rev && isDate(cell(ws,col.rev+r))) out.reviewed++;
+      if (col.agr && String(cell(ws,col.agr+r)||"").trim().toLowerCase()==="agree") out.concordant++;
     }
   });
   if (!found) throw new Error("tabs");
