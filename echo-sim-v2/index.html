@@ -1427,6 +1427,12 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { st.playing = false; $('play').textContent = 'Play'; $('play').setAttribute('aria-pressed', 'false'); }
   resize();
   requestAnimationFrame(tick);
+  // tell an embedding page (pulmonarypocus.com) how tall the simulator is, so its iframe fits without scrolling
+  if (window.parent !== window) {
+    const post = () => { try { window.parent.postMessage({ lab: 'echo-sim', labHeight: Math.ceil(document.documentElement.scrollHeight) }, '*'); } catch (e) { } };
+    try { new ResizeObserver(post).observe(document.body); } catch (e) { }
+    window.addEventListener('load', post); setTimeout(post, 300); setTimeout(post, 1500);
+  }
   window.__sim = { st, setMode, setView, TTE, TEE };
 })();
 
