@@ -1,0 +1,1433 @@
+<title>TTE &amp; TEE Simulator</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<style>
+/* Layout: scanner console. Live echo is the hero; probe + 3D heart and controls sit beside it (stacked on phones). */
+:root {
+  --bg: #0b0e10;          /* console body */
+  --panel: #12171a;       /* control deck */
+  --line: #222b30;        /* hairlines */
+  --fg: #dfe6e8;          /* primary text */
+  --muted: #8a989d;       /* secondary text */
+  --accent: #57c7d4;      /* scanner cyan: active controls, sector outline */
+  --marker: #f0b43c;      /* index marker amber */
+  --ecg: #4fdc7a;         /* ECG trace */
+  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
+  color-scheme: dark;
+}
+html, body { background: var(--bg); color: var(--fg); }
+body { font-family: var(--font-body); font-size: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 24px; }
+* { box-sizing: border-box; }
+button, input { font: inherit; color: inherit; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto 12px; }
+.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
+.brand h1 { font-family: var(--font-display); font-weight: 600; font-size: 1.35rem; letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
+.brand .sub { color: var(--muted); font-size: 0.82rem; }
+.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
+.seg button { border: 0; background: transparent; padding: 7px 16px; font-family: var(--font-display); font-weight: 600; letter-spacing: 0.08em; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--accent); color: #062026; }
+
+.stage { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; max-width: 1400px; margin: 0 auto; }
+@media (max-width: 860px) {
+  .stage { grid-template-columns: minmax(0, 1fr); }
+  .col { display: contents; }
+  .scope { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; order: 1; }
+  .transport { order: 2; } #viewsDeck { order: 3; } #v3 { order: 4; } #probeDeck { order: 5; } .note { order: 6; }
+}
+.col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+
+.scope { position: relative; background: #000; border-radius: 10px; overflow: hidden; aspect-ratio: 4 / 3; max-width: 100%; border: 1px solid var(--line); }
+.scope canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.view3d { position: relative; background: #0a0d0f; border-radius: 10px; overflow: hidden; aspect-ratio: 4 / 3; max-width: 100%; border: 1px solid var(--line); touch-action: none; cursor: grab; }
+.view3d canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.view3d .hint { position: absolute; left: 10px; bottom: 8px; font-size: 0.72rem; color: var(--muted); pointer-events: none; }
+.view3d .tools { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; }
+
+.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; font-size: 0.8rem; cursor: pointer; white-space: nowrap; color: var(--fg); }
+.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: #0f2328; }
+.chip.small { padding: 4px 10px; font-size: 0.74rem; background: rgba(18,23,26,0.85); }
+
+.deck { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
+.deck h2 { font-family: var(--font-display); font-weight: 600; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.views { display: flex; flex-wrap: wrap; gap: 6px; }
+.status { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.status .near { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); }
+.status .near.off { color: var(--muted); }
+
+.sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
+@media (max-width: 520px) { .sliders { grid-template-columns: minmax(0, 1fr); } }
+.sl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.sl .lab { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8rem; }
+.sl .lab span:last-child { font-family: var(--font-mono); color: var(--accent); font-variant-numeric: tabular-nums; }
+.sl .ends { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); }
+.sl .row { display: flex; align-items: center; gap: 6px; }
+.sl .row input { flex: 1; min-width: 0; }
+.nudge { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; width: 30px; height: 28px; cursor: pointer; font-family: var(--font-mono); }
+input[type=range] { -webkit-appearance: none; appearance: none; height: 28px; background: transparent; width: 100%; }
+input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--line); border-radius: 2px; }
+input[type=range]::-moz-range-track { height: 4px; background: var(--line); border-radius: 2px; }
+input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; background: var(--accent); margin-top: -7px; border: 2px solid #062026; }
+input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 50%; background: var(--accent); border: 2px solid #062026; }
+
+.transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.transport .grow { flex: 1 1 140px; min-width: 0; }
+.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 0.82rem; }
+.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.note { color: var(--muted); font-size: 0.74rem; line-height: 1.45; max-width: 70ch; }
+.err { padding: 24px; color: var(--fg); }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+</style>
+
+<div class="top">
+  <div class="brand"><h1>TTE &amp; TEE Simulator</h1><span class="sub">Pulmonary POCUS</span></div>
+  <div class="seg" role="group" aria-label="Modality">
+    <button id="mTTE" aria-pressed="true">TTE</button><button id="mTEE" aria-pressed="false">TEE</button>
+  </div>
+</div>
+
+<div class="stage">
+  <div class="col">
+    <div class="scope" id="scope"><canvas id="echo"></canvas><canvas id="ov"></canvas></div>
+    <div class="transport">
+      <button class="btn" id="play" aria-pressed="true">Pause</button>
+      <div class="sl grow"><div class="lab"><span>Heart rate</span><span id="hrV">72 bpm</span></div><input type="range" id="hr" min="40" max="140" value="72"></div>
+      <div class="sl grow"><div class="lab"><span>Gain</span><span id="gainV">50</span></div><input type="range" id="gain" min="0" max="100" value="50"></div>
+      <button class="btn" id="labels" aria-pressed="true">Labels</button>
+    </div>
+  </div>
+  <div class="col">
+    <div class="deck" id="viewsDeck">
+      <div class="status"><h2 id="viewsTitle">Standard views</h2><span class="near" id="near"></span></div>
+      <div class="views" id="views"></div>
+    </div>
+    <div class="deck" id="probeDeck">
+      <h2>Probe</h2>
+      <div class="sliders" id="sliders"></div>
+    </div>
+    <div class="view3d" id="v3"><canvas id="c3"></canvas>
+      <div class="tools"><button class="chip small" id="cut" aria-pressed="false">Cut heart</button><button class="chip small" id="skin" aria-pressed="true">Chest wall</button><button class="chip small" id="reset3">Reset view</button></div>
+      <span class="hint">Drag to rotate · scroll or pinch to zoom</span>
+    </div>
+    <p class="note">Simulated images from an original 3D heart model, for teaching probe manipulation and view recognition. Not for clinical measurement.</p>
+  </div>
+</div>
+
+<script>
+// ===== Anatomy: original heart model (all coordinates in cm) =====
+// Body frame labels: X = patient left, Y = anterior, Z = cranial. Origin = LV base center.
+// Heart frame: Z_h = base direction (apex -> base), Y_h = anterior, X_h = Y_h x Z_h.
+const V3 = {
+  add: (a, b) => [a[0] + b[0], a[1] + b[1], a[2] + b[2]],
+  sub: (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]],
+  mul: (a, s) => [a[0] * s, a[1] * s, a[2] * s],
+  dot: (a, b) => a[0] * b[0] + a[1] * b[1] + a[2] * b[2],
+  cross: (a, b) => [a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2], a[0] * b[1] - a[1] * b[0]],
+  len: (a) => Math.hypot(a[0], a[1], a[2]),
+  norm: (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; },
+  lerp: (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t],
+  // rotate v about unit axis k by angle th (Rodrigues)
+  rot: (v, k, th) => {
+    const c = Math.cos(th), s = Math.sin(th), kv = V3.cross(k, v), kd = V3.dot(k, v);
+    return [v[0] * c + kv[0] * s + k[0] * kd * (1 - c), v[1] * c + kv[1] * s + k[1] * kd * (1 - c), v[2] * c + kv[2] * s + k[2] * kd * (1 - c)];
+  },
+};
+
+const APEX_DIR = V3.norm([0.68, 0.42, -0.58]);
+const ZH = V3.mul(APEX_DIR, -1);
+const YH = V3.norm(V3.sub([0, 1, 0], V3.mul(ZH, V3.dot([0, 1, 0], ZH))));
+const XH = V3.cross(YH, ZH);
+const toH = (b) => [V3.dot(b, XH), V3.dot(b, YH), V3.dot(b, ZH)];
+const toB = (h) => V3.add(V3.add(V3.mul(XH, h[0]), V3.mul(YH, h[1])), V3.mul(ZH, h[2]));
+
+// ---- landmarks in body coordinates ----
+const AN = {};
+AN.Mb = [0.5, -0.5, 0.0];                       // mitral annulus center
+AN.Ab = [-1.3, 0.7, 0.8];                       // aortic valve center
+AN.aoDir = V3.norm([-0.3, 0.35, 0.9]);          // aortic root axis
+AN.LAc = [-0.5, -2.6, 1.8];
+AN.RAc = [-4.1, -0.9, 0.5];
+AN.PVb = [0.6, 2.9, 2.5];                       // pulmonic valve center
+AN.apexH = [0, 0, -8.1];                        // LV endocardial apex (heart frame)
+AN.apex = toB(AN.apexH);
+AN.RVcH = [-2.9, 1.9, -2.3];                    // RV cavity center (heart frame)
+AN.RVc = toB(AN.RVcH);
+AN.Tb = [-2.9, 0.8, -1.1];                      // tricuspid annulus center
+AN.tvDir = V3.norm(V3.sub(AN.RVc, AN.RAc));     // into RV
+AN.LVmidH = [0, 0, -4.0];
+AN.LVmid = toB(AN.LVmidH);
+
+// aortic chain: [point, radius]
+const aoP = (t) => V3.add(AN.Ab, V3.mul(AN.aoDir, t));
+AN.aorta = [
+  [AN.Ab, 1.12], [aoP(1.0), 1.55], [aoP(2.3), 1.3], [aoP(5.4), 1.45],
+  [[-1.0, -0.6, 8.7], 1.35], [[1.4, -4.4, 7.4], 1.25], [[1.6, -6.0, 3.0], 1.2], [[1.6, -6.0, -17], 1.1],
+];
+AN.pa = [[AN.PVb, 1.15], [[1.0, 0.3, 5.0], 1.2]];
+AN.rpa = [[[1.0, 0.3, 5.0], 1.0], [[-4.6, -2.4, 4.6], 0.85]];
+AN.lpa = [[[1.0, 0.3, 5.0], 1.0], [[4.4, -1.2, 5.4], 0.85]];
+AN.rvot = [[toB([-2.3, 3.4, -0.8]), 1.4], [AN.PVb, 1.15]];
+AN.lvot = [[toB([-0.5, 0.8, -1.4]), 0.95], [AN.Ab, 1.12]];
+AN.laa = [[[0.9, -1.4, 2.6], 0.7], [[2.7, -0.1, 2.7], 0.42]];
+AN.svc = [[[-4.0, -0.5, 2.4], 1.0], [[-3.7, -0.1, 11], 1.0]];
+AN.ivc = [[[-4.0, -1.0, -1.4], 1.1], [[-3.5, -1.8, -8], 1.15], [[-2.6, -3.0, -19], 1.1]];
+AN.pveins = [
+  [[-2.0, -3.1, 2.5], [-5.2, -3.4, 3.4]], [[-2.0, -3.5, 1.0], [-5.2, -3.9, 0.3]],
+  [[0.9, -3.1, 2.6], [4.4, -3.5, 3.5]], [[1.0, -3.5, 1.1], [4.4, -4.1, 0.4]],
+];
+AN.hv = [[[-3.5, -1.7, -7.2], [-10.5, -1.0, -11.5]], [[-3.5, -1.7, -7.2], [-4.0, 4.5, -11.5]], [[-3.4, -1.8, -7.4], [1.5, 2.6, -10.5]]];
+AN.esoX = -0.4; AN.esoY = -5.1;
+AN.descAo = [1.6, -6.0];
+
+// TEE esophagus / stomach path [point], depth from incisors at first point
+AN.esoPath = [[-0.6, -5.9, 17], [-0.5, -5.2, 6], [-0.4, -5.1, 0], [0.0, -4.7, -4.6], [1.6, -3.9, -7.4], [3.6, -2.7, -9.0], [5.8, -1.3, -9.9]];
+AN.esoDepth0 = 16;
+
+// ---- torso ----
+const TORSO = { cx: -1, cy: -1, a: 16, b: 8.6 };
+function skinPoint(X, Z) {
+  const u = (X - TORSO.cx) / TORSO.a;
+  const Y = TORSO.cy + TORSO.b * Math.sqrt(Math.max(0, 1 - u * u));
+  const N = V3.norm([(X - TORSO.cx) / (TORSO.a * TORSO.a), (Y - TORSO.cy) / (TORSO.b * TORSO.b), 0]);
+  return { S: [X, Y, Z], N };
+}
+function torsoHit(P, D) { // first exit of ray from inside torso
+  let t = 0;
+  for (let i = 0; i < 400; i++) {
+    const q = V3.add(P, V3.mul(D, t));
+    const e = ((q[0] - TORSO.cx) / TORSO.a) ** 2 + ((q[1] - TORSO.cy) / TORSO.b) ** 2;
+    if (e >= 1) return q;
+    t += 0.05;
+  }
+  return V3.add(P, V3.mul(D, t));
+}
+
+// ---- esophagus path ----
+function esoAt(depth) {
+  let s = depth - AN.esoDepth0, P = AN.esoPath;
+  for (let i = 0; i < P.length - 1; i++) {
+    const seg = V3.sub(P[i + 1], P[i]), L = V3.len(seg);
+    if (s <= L || i === P.length - 2) {
+      const t = Math.max(0, Math.min(s / L, 1.6));
+      return { p: V3.add(P[i], V3.mul(seg, t)), T: V3.norm(seg) };
+    }
+    s -= L;
+  }
+}
+
+// ---- probe poses ----
+// TEE: depth (cm), turn (deg, + = right), flex (deg, + = ante), omni (deg)
+function teePose(st) {
+  const e = esoAt(st.depth), T = e.T, up = V3.mul(T, -1);
+  let b = V3.norm(V3.sub([0, 1, 0], V3.mul(up, V3.dot([0, 1, 0], up))));
+  b = V3.rot(b, up, st.turn * Math.PI / 180);
+  const e1 = V3.norm(V3.cross(b, up));
+  const f = st.flex * Math.PI / 180;
+  const b2 = V3.rot(b, e1, f), up2 = V3.rot(up, e1, f);
+  const w = st.omni * Math.PI / 180;
+  const L = V3.norm(V3.add(V3.mul(e1, Math.cos(w)), V3.mul(up2, Math.sin(w))));
+  // flexed tip: joint 2.5 cm above transducer
+  const joint = V3.add(e.p, V3.mul(up, 2.2));
+  const tipDir = V3.rot(T, e1, f);
+  const tip = V3.add(joint, V3.mul(tipDir, 2.2));
+  const O = V3.add(tip, V3.mul(b2, 0.55));
+  return { O, B: b2, L, joint, tip, tipDir, e1, up: up2 };
+}
+
+// bone model mirror of the shader (for choosing windows)
+const RIB0 = 6.0, RIBS = 0.42;
+function skinDepthJS(p) {
+  const gx = 2 * (p[0] - TORSO.cx) / (TORSO.a * TORSO.a), gy = 2 * (p[1] - TORSO.cy) / (TORSO.b * TORSO.b);
+  const f = ((p[0] - TORSO.cx) / TORSO.a) ** 2 + ((p[1] - TORSO.cy) / TORSO.b) ** 2 - 1;
+  return -f / Math.hypot(gx, gy);
+}
+function boneJS(p) {
+  const sd = skinDepthJS(p);
+  if (p[1] < -1) return Math.hypot(p[0] + 1, p[1] + 10.2) < 2.1;
+  if (sd > 0.9 && sd < 2.2 && Math.abs(p[0] + 1.2) < 1.2 && p[2] > -8.6 && p[2] < 9) return true;
+  if (sd > 1.55 && sd < 2.4 && p[2] > -9.6) {
+    const X = p[0] + 1;
+    if (Math.abs(X) > 1) for (let k = 0; k < 7; k++) { const zk = RIB0 - 3.3 * k - RIBS * Math.abs(X); if (Math.abs(p[2] - zk) < 0.58) return true; }
+  }
+  return false;
+}
+// fraction of the sector's scan lines blocked by bone within the first 4 cm
+function blockedFrac(pose) {
+  let n = 0, b = 0;
+  for (let a = -0.75; a <= 0.75; a += 0.05) {
+    n++;
+    const d = V3.add(V3.mul(pose.B, Math.cos(a)), V3.mul(pose.L, Math.sin(a)));
+    for (let r = 0.1; r < 4; r += 0.08) if (boneJS(V3.add(pose.O, V3.mul(d, r)))) { b += Math.abs(a) < 0.35 ? 3 : 1; break; }
+  }
+  return b / n;
+}
+// best plane through S: fit weighted points, keep 'avoid' points out by a margin
+function fitPlane(S, pts, avoid = [], stepDeg = 3) {
+  let best = null;
+  for (let th = 0; th < 180; th += stepDeg) for (let ph = 0; ph < 180; ph += stepDeg) {
+    const t = th * Math.PI / 180, p = ph * Math.PI / 180;
+    const n = [Math.sin(t) * Math.cos(p), Math.sin(t) * Math.sin(p), Math.cos(t)];
+    let sc = 0;
+    for (const [X, w] of pts) { const d = V3.dot(V3.sub(X, S), n); sc += w * d * d; }
+    for (const [X, k, w] of avoid) { const d = Math.abs(V3.dot(V3.sub(X, S), n)); if (d < k) sc += w * (k - d) ** 2; }
+    if (!best || sc < best.sc) best = { sc, n };
+  }
+  return best;
+}
+// TTE presets built from anatomy
+function planeFrom(S, target, n, sideVec) {
+  // beam from S toward target, constrained to plane with normal n
+  let B = V3.norm(V3.sub(target, S));
+  B = V3.norm(V3.sub(B, V3.mul(n, V3.dot(B, n))));
+  let L = V3.norm(V3.cross(n, B));
+  if (V3.dot(L, sideVec) < 0) L = V3.mul(L, -1);
+  return { O: S, B, L };
+}
+function apicalSkin() { // skin point nearest the apex, nudged inferolaterally
+  let best = null;
+  for (let X = 2; X <= 12; X += 0.1) for (let Z = -10; Z <= -2; Z += 0.1) {
+    const S = skinPoint(X, Z).S; const d = V3.len(V3.sub(S, V3.add(AN.apex, V3.mul(APEX_DIR, 0.0))));
+    if (!best || d < best.d) best = { d, S };
+  }
+  return V3.add(best.S, [0.6, 0, -0.6]);
+}
+function bestWindow(X0, Z0, build, rad = 1.6) {
+  let best = null;
+  for (let dx = -rad; dx <= rad; dx += 0.2) for (let dz = -rad; dz <= rad; dz += 0.2) {
+    const S = skinPoint(X0 + dx, Z0 + dz).S;
+    const pose = build(S);
+    const sc = blockedFrac(pose) + 0.02 * (dx * dx + dz * dz);
+    if (!best || sc < best.sc) best = { sc, S };
+  }
+  return best.S;
+}
+function buildTTEPresets() {
+  const plaxB = (S) => { const n = V3.norm(V3.cross(APEX_DIR, V3.sub(AN.Mb, S))); return planeFrom(S, AN.Mb, n, ZH); };
+  const para = bestWindow(1.3, 2.4, plaxB);
+  const apical0 = apicalSkin();
+  const a4B = (S) => { const n = V3.norm(V3.cross(V3.sub(AN.Mb, S), V3.sub(AN.Tb, S))); return planeFrom(S, V3.lerp(AN.Mb, AN.Tb, 0.5), n, V3.sub(AN.Mb, AN.Tb)); };
+  const apical = bestWindow(apical0[0], apical0[2], a4B, 1.2);
+  const sub = [-0.8, skinPoint(-0.8, 0).S[1] - 0.3, -12.5];
+  const P = {};
+  const nPL = V3.norm(V3.cross(APEX_DIR, V3.sub(AN.Mb, para)));
+  P.PLAX = { ...planeFrom(para, AN.Mb, nPL, ZH), depth: 16, win: 'para' };
+  // RV inflow: plane holds the RA, the tricuspid valve and the RV long axis, from a lower, more medial window
+  const rvApex = toB([-3.4, 2.2, -5.6]);
+  const rviB = (S) => { const n = V3.norm(V3.cross(V3.sub(AN.Tb, S), V3.sub(rvApex, AN.RAc))); return planeFrom(S, V3.lerp(AN.Tb, AN.RVc, 0.35), n, ZH); };
+  const paraLow = bestWindow(1.2, -0.4, rviB, 2.0);
+  {
+    // rotate about the beam toward the TV until the plane clears the LVOT and aortic root but keeps the RV body and RA
+    const base = rviB(paraLow), u = base.B, lvotPt = V3.lerp(AN.lvot[0][0], AN.Ab, 0.4);
+    let best = null;
+    const sepBase = toB([-2.6, 1.7, -1.0]), sepMid = toB([-2.8, 1.9, -3.0]);
+    for (let a = -70; a <= 70; a += 1) {
+      const L = V3.rot(base.L, u, a * Math.PI / 180), n = V3.cross(u, L);
+      const d = (X) => Math.abs(V3.dot(V3.sub(X, paraLow), n));
+      const sc = -Math.min(d(AN.Ab) - 1.2, d(lvotPt) - 1.0, d(sepBase) - 1.0, d(sepMid) - 0.8) + 0.5 * d(AN.RVc) + 0.4 * d(AN.RAc) + 0.6 * d(AN.Tb);
+      if (!best || sc < best.sc) best = { sc, L };
+    }
+    P['RV inflow'] = { O: paraLow, B: u, L: best.L, depth: 16, win: 'para' };
+  }
+  // RV outflow (ASE parasternal RVOT view): the plane runs along the RVOT, pulmonic valve and main PA to the
+  // bifurcation, tilted anteriorly off the PLAX so the LV and LA drop out
+  const rvot0 = AN.rvot[0][0], paBif = AN.pa[1][0];
+  const rvotMid = V3.lerp(rvot0, AN.PVb, 0.5), paMid = V3.lerp(AN.PVb, paBif, 0.5);
+  const rvoPts = [[rvot0, 1], [rvotMid, 2], [AN.PVb, 2.5], [paMid, 2], [paBif, 1]];
+  const rvoAvoid = [[AN.LAc, 2.6, 3], [AN.Mb, 2.2, 3], [AN.Ab, 1.0, 1]];
+  let rvoBest = null;
+  for (let X = 0.0; X <= 5.0; X += 0.3) for (let Z = 0.6; Z <= 5.4; Z += 0.3) {
+    const S = skinPoint(X, Z).S;
+    const f = fitPlane(S, rvoPts, rvoAvoid, 4);
+    const pose = planeFrom(S, V3.lerp(AN.PVb, rvotMid, 0.3), f.n, V3.sub(paBif, rvot0));
+    const sc = f.sc + 25 * blockedFrac(pose);
+    if (!rvoBest || sc < rvoBest.sc) rvoBest = { sc, S };
+  }
+  {
+    const f = fitPlane(rvoBest.S, rvoPts, rvoAvoid, 1);
+    P['RV outflow'] = { ...planeFrom(rvoBest.S, V3.lerp(AN.PVb, rvotMid, 0.3), f.n, V3.sub(paBif, rvot0)), depth: 13, win: 'para' };
+  }
+  const sax = (C, axis, depth) => {
+    const u = V3.norm(V3.sub(C, para));
+    const n = V3.norm(V3.sub(axis, V3.mul(u, V3.dot(axis, u))));
+    return { ...planeFrom(para, C, n, [1, 0, 0.2]), depth, win: 'para' };
+  };
+  P['PSAX AV'] = sax(V3.add(AN.Ab, V3.mul(AN.aoDir, 0.3)), AN.aoDir, 14);
+  P['PSAX MV'] = sax(toB([0.2, -0.2, -0.6]), APEX_DIR, 15);
+  P['PSAX PM'] = sax(toB([0, 0, -3.6]), APEX_DIR, 15);
+  P['PSAX apex'] = sax(toB([0, 0, -6.3]), APEX_DIR, 14);
+  const crux = V3.lerp(AN.Mb, AN.Tb, 0.5);
+  const n4 = V3.norm(V3.cross(V3.sub(AN.Mb, apical), V3.sub(AN.Tb, apical)));
+  P.A4C = { ...planeFrom(apical, crux, n4, V3.sub(AN.Mb, AN.Tb)), depth: 17, win: 'apical' };
+  const n5 = V3.norm(V3.cross(V3.sub(AN.Ab, apical), V3.sub(AN.Mb, AN.Tb)));
+  P.A5C = { ...planeFrom(apical, V3.lerp(AN.Ab, AN.Mb, 0.5), n5, V3.sub(AN.Mb, AN.Tb)), depth: 17, win: 'apical' };
+  const n3 = V3.norm(V3.cross(V3.sub(AN.Mb, apical), V3.sub(AN.Ab, apical)));
+  P.A3C = { ...planeFrom(apical, AN.Mb, n3, V3.sub(AN.Ab, AN.Mb)), depth: 17, win: 'apical' };
+  // A2C: rotate about the beam until the right heart leaves the plane, with the LAA on screen right
+  {
+    const u = V3.norm(V3.sub(AN.Mb, apical));
+    let best = null;
+    for (let a = -180; a < 180; a += 1) {
+      const L = V3.rot(P.A4C.L, u, a * Math.PI / 180);
+      const n = V3.cross(u, L);
+      const dist = (X) => Math.abs(V3.dot(V3.sub(X, apical), n));
+      const score = -Math.min(dist(AN.Tb), dist(AN.RVc) * 1.2, dist(AN.Ab) * 1.4) + 0.3 * dist(AN.apex);
+      if (V3.dot(L, [0, 0.4, 1]) > 0 && (!best || score < best.s)) best = { s: score, L, a };
+    }
+    P.A2C = { O: apical, B: u, L: best.L, depth: 17, win: 'apical' };
+  }
+  const nS4 = V3.norm(V3.cross(V3.sub(AN.Mb, sub), V3.sub(AN.Tb, sub)));
+  P['Subcostal 4C'] = { ...planeFrom(sub, crux, nS4, V3.sub(AN.Mb, AN.Tb)), depth: 19, win: 'sub' };
+  const ivcPt = [-3.7, -1.5, -5.5];
+  const nIVC = V3.norm(V3.cross(V3.sub(ivcPt, sub), V3.sub(AN.RAc, sub)));
+  // subxiphoid short axis at the base: RA, tricuspid valve, RV, RVOT, pulmonic valve and PA wrapped around the aortic valve
+  {
+    const r0 = AN.rvot[0][0], rm = V3.lerp(AN.rvot[0][0], AN.PVb, 0.5), pm = V3.lerp(AN.PVb, AN.pa[1][0], 0.4);
+    const f = fitPlane(sub, [[AN.Tb, 1.5], [AN.RAc, 0.6], [r0, 1.5], [rm, 2.5], [AN.PVb, 2.5], [pm, 1.2], [AN.Ab, 0.6]], [], 1);
+    P['Subcostal RV in-out'] = { ...planeFrom(sub, V3.lerp(AN.Ab, rm, 0.4), f.n, V3.sub(AN.PVb, AN.Tb)), depth: 20, win: 'sub' };
+  }
+  P['Subcostal IVC'] = { ...planeFrom(sub, ivcPt, nIVC, [0, 0, 1]), depth: 18, win: 'sub' };
+  return P;
+}
+
+// ---- TEE preset solver ----
+function planeOf(p) { const n = V3.norm(V3.cross(p.B, p.L)); return n; }
+function inSector(p, X, D) {
+  const v = V3.sub(X, p.O), r = Math.hypot(V3.dot(v, p.B), V3.dot(v, p.L));
+  const a = Math.atan2(V3.dot(v, p.L), V3.dot(v, p.B));
+  let pen = 0;
+  if (V3.dot(v, p.B) < 0.5) pen += 25;
+  if (Math.abs(a) > 0.68) pen += (Math.abs(a) - 0.68) * 30;
+  if (r > D - 0.5) pen += (r - D + 0.5) * 3;
+  return pen;
+}
+function solveTEE(spec) {
+  const obj = (s) => {
+    const p = teePose(s), n = planeOf(p);
+    let e = 0;
+    for (const X of spec.pts) { const d = V3.dot(V3.sub(X, p.O), n); e += d * d + inSector(p, X, spec.depth); }
+    if (spec.normal) { const c = Math.abs(V3.dot(n, spec.normal)); e += (1 - c) * 60; }
+    if (spec.center) { const v = V3.sub(spec.center, p.O); const ang = Math.atan2(V3.dot(v, p.L), V3.dot(v, p.B)); e += 40 * ang * ang; }
+    if (spec.right) for (const [a, b] of spec.right) { if (V3.dot(V3.sub(b, a), p.L) < 0) e += 20; }
+    e += 0.002 * s.turn * s.turn * (spec.turnW ?? 1) + 0.002 * s.flex * s.flex + 0.001 * (s.omni - spec.omni) ** 2;
+    return e;
+  };
+  const lim = { depth: [spec.minDepth ?? 20, spec.maxDepth ?? 47], turn: [-180, 180], flex: [-40, 100], omni: [0, 180] };
+  const clamp = (s) => { for (const k in lim) s[k] = Math.max(lim[k][0], Math.min(lim[k][1], s[k])); return s; };
+  let best = null;
+  const starts = [];
+  for (const d of spec.depths) for (const t of spec.turns ?? [0]) for (const f of spec.flexes ?? [0]) starts.push({ depth: d, turn: t, flex: f, omni: spec.omni });
+  if (spec.from) for (const s0 of starts) Object.assign(s0, spec.from, { omni: spec.omni });
+  for (const s0 of starts) {
+    let s = { ...s0 }, e = obj(s), step = { depth: 2, turn: 15, flex: 10, omni: 10 };
+    for (let it = 0; it < 400; it++) {
+      let improved = false;
+      for (const k of ['depth', 'turn', 'flex', 'omni']) {
+        if (spec.fix && spec.fix.includes(k)) continue;
+        for (const sg of [1, -1]) {
+          const s2 = clamp({ ...s, [k]: s[k] + sg * step[k] }); const e2 = obj(s2);
+          if (e2 < e) { s = s2; e = e2; improved = true; }
+        }
+      }
+      if (!improved) { for (const k in step) step[k] *= 0.6; if (step.depth < 0.01) break; }
+    }
+    if (!best || e < best.e) best = { s, e };
+  }
+  const r = (x) => Math.round(x * 10) / 10;
+  return { depth: r(best.s.depth), turn: r(best.s.turn), flex: r(best.s.flex), omni: Math.round(best.s.omni), err: best.e };
+}
+function solveAllTEE() {
+  const S = teeSpecs(), R = {};
+  for (const k in S) {
+    const sp = S[k];
+    if (sp.fixTo4C) sp.from = R['ME 4C'];
+    if (sp.fixToTG) sp.from = R['TG mid SAX'];
+    R[k] = { ...solveTEE(sp), D: sp.depth };
+  }
+  return R;
+}
+function teeSpecs() {
+  const ME = [29, 31, 33, 35], UE = [24, 26, 28], TG = [42, 44, 46];
+  const lvMid = AN.LVmid;
+  const asc = V3.add(AN.Ab, V3.mul(AN.aoDir, 3.6));
+  const svcPt = [-3.9, -0.4, 4.0], ivcJ = [-3.9, -1.2, -2.2];
+  return {
+    'ME 4C': { pts: [AN.Mb, AN.Tb, AN.apex], omni: 5, depths: ME, flexes: [-20, 0], depth: 16, right: [[AN.Tb, AN.Mb]] },
+    'ME 5C': { pts: [AN.Ab, AN.apex, V3.lerp(AN.Tb, AN.Mb, 0.3)], omni: 5, depths: ME, flexes: [-10, 10], depth: 16, right: [[AN.Tb, AN.Mb]] },
+    'ME MV comm': { pts: [AN.Mb, AN.apex], omni: 60, depths: [0], fixTo4C: true, fix: ['depth', 'turn', 'flex', 'omni'], depth: 16 },
+    'ME 2C': { pts: [AN.Mb, AN.apex, AN.laa[0][0]], omni: 90, depths: [0], fixTo4C: true, fix: ['depth', 'turn', 'flex', 'omni'], depth: 16 },
+    'ME LAX': { pts: [AN.Mb, AN.Ab, AN.apex], omni: 130, depths: ME, flexes: [-20, 0], depth: 16 },
+    'ME AV SAX': { pts: [AN.Ab], normal: AN.aoDir, omni: 40, depths: ME, flexes: [-10, 10, 25], depth: 12 },
+    'ME AV LAX': { pts: [AN.Ab, asc, AN.Mb], omni: 130, depths: ME, flexes: [-10, 10], depth: 12 },
+    'ME RV in-out': { pts: [AN.Tb, AN.PVb, AN.Ab], omni: 70, depths: ME, flexes: [-10, 10], depth: 14 },
+    'ME bicaval': { pts: [svcPt, ivcJ, AN.RAc], omni: 100, depths: ME, turns: [20, 40], depth: 12, turnW: 0.1 },
+    'UE asc Ao SAX': { pts: [asc], normal: AN.aoDir, omni: 20, depths: UE, flexes: [0, 20], depth: 10 },
+    'TG mid SAX': { pts: [lvMid, toB([2.4, 0, -4.0]), toB([-2.4, 0, -4.0])], center: lvMid, normal: APEX_DIR, omni: 0, depths: TG, minDepth: 42, flexes: [40, 70, 90], depth: 12, right: [[toB([-2, 0, -4]), toB([2, 0, -4])]] },
+    'TG 2C': { pts: [lvMid, AN.Mb, toB([0, 0, -6.5])], omni: 90, depths: [0], fixToTG: true, fix: ['depth', 'turn', 'flex'], flexes: [40, 70, 90], depth: 14 },
+    'Desc Ao SAX': { pts: [[1.6, -6.0, -2.0]], center: [1.6, -6.0, -2.0], normal: [0, 0, 1], omni: 0, depths: [33, 36], turns: [-120, -150], depth: 8, turnW: 0 },
+    'Desc Ao LAX': { pts: [[1.6, -6.0, -4.0], [1.6, -6.0, 0.0]], center: [1.6, -6.0, -2.0], omni: 90, depths: [33, 36], turns: [-120, -150], depth: 8, turnW: 0 },
+  };
+}
+
+// Landmarks for labels: [name, body point, radius]
+function labelPoints() {
+  return [
+    ['LV', toB([0, 0, -3.2]), 2.3], ['RV', toB([-3.4, 2.2, -2.4]), 1.8], ['LA', AN.LAc, 1.8], ['RA', AN.RAc, 1.8],
+    ['Ao', V3.add(AN.Ab, V3.mul(AN.aoDir, 1.6)), 1.3], ['PA', V3.lerp(AN.PVb, AN.pa[1][0], 0.45), 1.1],
+    ['MV', V3.add(AN.Mb, V3.mul(ZH, -0.6)), 1.3], ['TV', V3.add(AN.Tb, V3.mul(AN.tvDir, 0.5)), 1.4], ['AV', AN.Ab, 1.0],
+    ['PV', AN.PVb, 0.9], ['RVOT', V3.lerp(AN.rvot[0][0], AN.PVb, 0.45), 1.1], ['LVOT', V3.lerp(AN.lvot[0][0], AN.Ab, 0.5), 0.9],
+    ['LAA', AN.laa[1][0], 0.5], ['SVC', [-3.85, -0.3, 5.5], 0.9], ['IVC', [-3.6, -1.6, -6.0], 0.9],
+    ['Desc Ao', [1.6, -6.0, 0], 1.0], ['Liver', [-3.5, 3.0, -10.5], 4.0], ['Asc Ao', V3.add(AN.Ab, V3.mul(AN.aoDir, 4.0)), 1.3],
+  ];
+}
+
+if (typeof module !== 'undefined') module.exports = { V3, AN, XH, YH, ZH, toH, toB, APEX_DIR, TORSO, skinPoint, esoAt, teePose, buildTTEPresets, solveTEE, solveAllTEE, teeSpecs, labelPoints, planeOf };
+
+// Cardiac cycle: phase t in [0,1), R wave at t = 0
+function ss(a, b, x) { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); }
+function cyc(t) {
+  let vol;
+  if (t < 0.06) vol = 1;
+  else if (t < 0.38) vol = 1 - (1 - Math.cos(Math.PI * (t - 0.06) / 0.32)) / 2;
+  else if (t < 0.45) vol = 0;
+  else if (t < 0.62) vol = 0.72 * ss(0.45, 0.62, t);
+  else if (t < 0.86) vol = 0.72 + 0.1 * ss(0.62, 0.86, t);
+  else vol = 0.82 + 0.18 * ss(0.86, 0.98, t);
+  const S = 1 - vol;
+  const mv = (x) => x < 0.46 ? 0 : x < 0.5 ? ss(0.46, 0.5, x) : x < 0.62 ? 1 - 0.55 * ss(0.5, 0.62, x) : x < 0.86 ? 0.45 - 0.08 * ss(0.62, 0.86, x) : x < 0.9 ? 0.37 + 0.5 * ss(0.86, 0.9, x) : 0.87 * (1 - ss(0.94, 0.995, x));
+  const av = (x) => x < 0.065 ? 0 : x < 0.095 ? ss(0.065, 0.095, x) : x < 0.34 ? 1 - 0.1 * ss(0.15, 0.34, x) : 0.9 * (1 - ss(0.34, 0.385, x));
+  return { S, desc: 1.3 * S, MV: mv(t), TV: mv((t + 0.985) % 1), AV: av(t), PV: av((t + 0.99) % 1) };
+}
+// synthetic ECG (mV-ish), R at t = 0
+function ecg(t) {
+  const g = (c, w, a) => a * Math.exp(-((((t - c + 1.5) % 1) - 0.5) ** 2) / (2 * w * w));
+  return g(0.885, 0.022, 0.15) + g(0.985, 0.006, -0.12) + g(0.0, 0.009, 1.0) + g(0.018, 0.008, -0.25) + g(0.27, 0.045, 0.28);
+}
+if (typeof module !== 'undefined') module.exports = { cyc, ecg };
+
+// ===== GLSL generation: heart SDF in the heart frame, warp, valves, body tissues =====
+const f = (x) => (Math.round(x * 10000) / 10000).toFixed(4);
+const v3 = (v) => `vec3(${f(v[0])},${f(v[1])},${f(v[2])})`;
+function glslCommon() {
+  const H = (b) => v3(toH(b));
+  const chain = (name, pts) => {
+    let s = `float ${name}(vec3 q){ float d = 1e3;\n`;
+    for (let i = 0; i < pts.length - 1; i++) s += `  d = min(d, sdRoundCone(q, ${H(pts[i][0])}, ${H(pts[i + 1][0])}, ${f(pts[i][1])}, ${f(pts[i + 1][1])}));\n`;
+    return s + '  return d; }\n';
+  };
+  const basis = (n) => { const a = Math.abs(n[0]) < 0.8 ? [1, 0, 0] : [0, 1, 0]; const u = V3.norm(V3.cross(n, a)); const v = V3.cross(n, u); return [u, v]; };
+  // valve frames (heart frame)
+  const mvN = [0, 0, 1], mvC = toH(AN.Mb);
+  const mvAntDir = (() => { const d = V3.sub(toH(AN.Ab), mvC); d[2] = 0; return V3.norm(d); })();
+  const mvU = mvAntDir, mvV = V3.cross(mvN, mvU);
+  const tvN = V3.mul(toH(AN.tvDir), -1); // toward RA
+  const [tvU, tvV] = basis(tvN);
+  const avN = toH(AN.aoDir); const [avU, avV] = basis(avN);
+  const pvN = toH(V3.norm(V3.sub(AN.pa[1][0], AN.PVb))); const [pvU, pvV] = basis(pvN);
+  const sepMid = V3.lerp(AN.LAc, AN.RAc, 0.5), sepN = V3.norm(V3.sub(AN.LAc, AN.RAc));
+  const pm1 = [1.7 * 0.72, -1.7 * 0.69], pm2 = [-1.7 * 0.62, -1.7 * 0.78];
+
+  return `
+precision highp float;
+uniform float uS;      // systolic contraction 0..1
+uniform float uDesc;   // base descent cm
+uniform float uMV, uTV, uAV, uPV; // valve opening 0..1
+uniform float uTime;
+
+const vec3 XH = ${v3(XH)}; const vec3 YH = ${v3(YH)}; const vec3 ZH = ${v3(ZH)};
+vec3 toH(vec3 b){ return vec3(dot(b,XH), dot(b,YH), dot(b,ZH)); }
+vec3 toB(vec3 h){ return XH*h.x + YH*h.y + ZH*h.z; }
+
+float sdEllipsoid(vec3 p, vec3 r){ float k0 = length(p/r); float k1 = length(p/(r*r)); return k0*(k0-1.0)/max(k1,1e-5); }
+float sdCapsule(vec3 p, vec3 a, vec3 b, float r){ vec3 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h)-r; }
+float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2){
+  vec3 ba = b - a; float l2 = dot(ba,ba); float rr = r1 - r2; float a2 = l2 - rr*rr; float il2 = 1.0/l2;
+  vec3 pa = p - a; float y = dot(pa,ba); float z = y - l2;
+  vec3 xv = pa*l2 - ba*y; float x2 = dot(xv,xv); float y2 = y*y*l2; float z2 = z*z*l2;
+  float k = sign(rr)*rr*rr*x2;
+  if( sign(z)*a2*z2 > k ) return sqrt(x2 + z2)*il2 - r2;
+  if( sign(y)*a2*y2 < k ) return sqrt(x2 + y2)*il2 - r1;
+  return (sqrt(x2*a2*il2)+y*rr)*il2 - r1;
+}
+float smin(float a, float b, float k){ float h = clamp(0.5+0.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
+float sdSeg2(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h); }
+
+// ---- inverse warp: current heart-frame point -> end-diastolic reference ----
+vec3 warpInv(vec3 h){
+  float d = uDesc, zap = -8.7, ztop = 5.0;
+  float z = h.z, z0 = z;
+  if (z < -d) z0 = zap + (z - zap) * (-zap)/(-d - zap);
+  else if (z < ztop) z0 = ztop - (ztop - z) * ztop/(ztop + d);
+  float rho = length(h.xy);
+  float wl = 1.0 - smoothstep(6.5, 10.0, rho);
+  z0 = mix(z, z0, wl);
+  float lam = (-d - zap)/(-zap);
+  float k = 1.0 - 0.28*uS;
+  float zc = clamp((z0 + 2.5)/5.6, -1.0, 1.0); float r0 = 2.5*sqrt(max(0.0, 1.0 - zc*zc));
+  float ze = clamp((z0 + 2.3)/6.4, -1.0, 1.0); float re0 = 3.5*sqrt(max(0.0, 1.0 - ze*ze));
+  float rt = k*r0;
+  float baseFade = smoothstep(1.3, -0.4, z0);
+  float rho0;
+  if (rho < rt) rho0 = rho/k;
+  else {
+    float ret = sqrt(rt*rt + (re0*re0 - r0*r0)/lam);
+    float f = sqrt(max(0.0, r0*r0 + lam*(rho*rho - rt*rt)));
+    float w = 1.0 - smoothstep(ret, ret + 2.8, rho);
+    rho0 = mix(rho, f, w);
+  }
+  rho0 = mix(rho, rho0, baseFade);
+  // RV free wall moves in a little
+  vec2 xy = h.xy * (rho0/max(rho,1e-4));
+  return vec3(xy, z0);
+}
+
+${chain('dAorta', AN.aorta)}
+${chain('dPAm', AN.pa)}
+${chain('dRPA', AN.rpa)}
+${chain('dLPA', AN.lpa)}
+${chain('dRVOTc', AN.rvot)}
+${chain('dLVOTc', AN.lvot)}
+${chain('dLAAc', AN.laa)}
+${chain('dSVC', AN.svc)}
+${chain('dIVC', AN.ivc)}
+float dPVeins(vec3 q){ float d=1e3;
+${AN.pveins.map((s) => `  d=min(d, sdCapsule(q, ${H(s[0])}, ${H(s[1])}, 0.6));`).join('\n')}
+  return d; }
+float dPM(vec3 q){
+  float a = sdEllipsoid(q - vec3(${f(pm1[0])},${f(pm1[1])},-4.4), vec3(0.78,0.78,1.45));
+  float b = sdEllipsoid(q - vec3(${f(pm2[0])},${f(pm2[1])},-4.4), vec3(0.78,0.78,1.45));
+  float mb = sdCapsule(q, vec3(-2.25,1.55,-4.6), vec3(-4.55,3.0,-4.3), 0.22); // moderator band
+  return min(min(a,b), mb);
+}
+const vec3 MV_C = ${v3(mvC)}; const vec3 MV_U = ${v3(mvU)}; const vec3 MV_V = ${v3(mvV)}; const vec3 MV_N = ${v3(mvN)};
+const vec3 TV_C = ${H(AN.Tb)}; const vec3 TV_U = ${v3(tvU)}; const vec3 TV_V = ${v3(tvV)}; const vec3 TV_N = ${v3(tvN)};
+const vec3 AV_C = ${H(AN.Ab)}; const vec3 AV_U = ${v3(avU)}; const vec3 AV_V = ${v3(avV)}; const vec3 AV_N = ${v3(avN)};
+const vec3 PV_C = ${H(AN.PVb)}; const vec3 PV_U = ${v3(pvU)}; const vec3 PV_V = ${v3(pvV)}; const vec3 PV_N = ${v3(pvN)};
+const vec3 LA_C = ${H(AN.LAc)}; const vec3 RA_C = ${H(AN.RAc)};
+const vec3 SEP_P = ${H(sepMid)}; const vec3 SEP_N = ${v3(toH(sepN))};
+const vec3 RVOT0 = ${H(AN.rvot[0][0])};
+const vec3 RV_C = vec3(${AN.RVcH.map(f).join(',')});
+const vec3 PM1 = vec3(${f(pm1[0])},${f(pm1[1])},-3.2); const vec3 PM2 = vec3(${f(pm2[0])},${f(pm2[1])},-3.2);
+
+// Blood pool SDF and wall SDF. id: 0 LV, 1 RV, 2 LA, 3 RA, 4 Ao, 5 PA, 6 veins, 7 annulus
+struct H3 { float blood; float wall; int id; int bid; float lvEpi; float lvCav; };
+H3 heartSDF(vec3 q){
+  float lvC = max(sdEllipsoid(q - vec3(0,0,-2.5), vec3(2.5,2.5,5.6)), q.z - 0.05);
+  float lvE = max(sdEllipsoid(q - vec3(0,0,-2.3), vec3(3.5,3.5,6.4)), q.z - 0.5);
+  float ao = dAorta(q);
+  float aoRoot = max(ao, -dot(q - AV_C, AV_N));
+  float lvot = dLVOTc(q);
+  float mc = sdCapsule(q, MV_C - MV_N*0.9, MV_C + MV_N*0.7, 1.6);
+  mc = max(mc, -(aoRoot - 0.3));
+  float rvRaw = sdEllipsoid(q - RV_C, vec3(2.6,2.4,3.8));
+  float rvFill = min(sdCapsule(q, RV_C + vec3(0.0,0.0,1.0), TV_C, 1.35), sdCapsule(q, RV_C + vec3(0.0,0.0,1.0), RVOT0, 1.25));
+  float rv = max(max(min(rvRaw, rvFill), -lvE), -(lvot - 0.35));
+  rv = max(rv, -(dAorta(q) - 0.4));
+  float sep = dot(q - SEP_P, SEP_N);
+  float la = sdEllipsoid(q - LA_C, vec3(2.25,1.75,2.05));
+  la = max(la, -(aoRoot - 0.45)); la = max(la, -lvE); la = max(la, -sep - 0.16);
+  float ra = sdEllipsoid(q - RA_C, vec3(2.1,2.0,2.35));
+  ra = max(ra, -(ao - 0.4)); ra = max(ra, sep - 0.16); ra = max(ra, -(rvRaw - 0.25)); ra = max(ra, -lvE);
+  float tc = sdCapsule(q, TV_C - TV_N*0.8, TV_C + TV_N*0.7, 1.75); tc = max(tc, -lvE); tc = max(tc, -(ao-0.35));
+  float rvot = max(max(dRVOTc(q), -(ao - 0.4)), -lvE);
+  float pa = min(min(dPAm(q), dRPA(q)), dLPA(q)); pa = max(pa, -(ao - 0.35));
+  float laa = max(dLAAc(q), -(pa - 0.3));
+  float pv = dPVeins(q);
+  float svc = max(dSVC(q), -(ao-0.35)); float ivc = dIVC(q);
+  float pm = dPM(q);
+
+  H3 r;
+  float lv = min(min(lvC, lvot), mc);
+  float b = lv; int bid = 0;
+  if (rv < b) { b = rv; bid = 1; } if (rvot < b) { b = rvot; bid = 1; } if (tc < b) { b = tc; bid = 1; }
+  if (la < b) { b = la; bid = 2; } if (laa < b) { b = laa; bid = 2; } if (pv < b) { b = pv; bid = 2; }
+  if (ra < b) { b = ra; bid = 3; } if (svc < b) { b = svc; bid = 3; } if (ivc < b) { b = ivc; bid = 3; }
+  if (ao < b) { b = ao; bid = 4; } if (pa < b) { b = pa; bid = 5; }
+  b = max(b, -pm);
+  r.bid = bid;
+  r.blood = b; r.lvEpi = lvE; r.lvCav = lvC;
+  // walls
+  float w = lvE; int id = 0; float t;
+  t = rv - 0.42;  if (t < w) { w = t; id = 1; }
+  t = rvot - 0.38; if (t < w) { w = t; id = 1; }
+  t = la - 0.26;  if (t < w) { w = t; id = 2; }
+  t = laa - 0.2;  if (t < w) { w = t; id = 2; }
+  t = ra - 0.26;  if (t < w) { w = t; id = 3; }
+  t = ao - 0.26;  if (t < w) { w = t; id = 4; }
+  t = pa - 0.2;   if (t < w) { w = t; id = 5; }
+  t = min(svc, ivc) - 0.16; if (t < w) { w = t; id = 6; }
+  t = pv - 0.16; if (t < w) { w = t; id = 8; }
+  t = min(tc, mc) - 0.3; if (t < w) { w = t; id = 7; }
+  t = lvot - 0.3; if (t < w) { w = t; id = 0; }
+  t = pm; if (t < w) { w = t; id = 0; }
+  r.wall = w; r.id = id;
+  return r;
+}
+
+// ---- valves: distance to leaflet surfaces ----
+float funnelValve(vec3 q, vec3 C, vec3 U, vec3 V, vec3 N, float R0, vec2 coapt, float open, float thClosed){
+  vec3 w = q - C; float ax = dot(w, N); vec2 pl = vec2(dot(w,U), dot(w,V)) - coapt;
+  float rho = length(pl); vec2 d = rho > 1e-4 ? pl/rho : vec2(1,0);
+  float cd = dot(coapt, d); float R = -cd + sqrt(max(0.0, cd*cd - dot(coapt,coapt) + R0*R0));
+  float th = mix(thClosed, 1.42, pow(open, 0.75));
+  float L = R/cos(thClosed)*1.03;
+  // leaflet bends: mid-point bulge toward the ventricle when closed
+  vec2 Hh = vec2(R, 0.0), Tp = vec2(R - L*cos(th), -L*sin(th));
+  vec2 M = mix(Hh, Tp, 0.5) + vec2(0.0, -0.18*(1.0-open));
+  float dd = min(sdSeg2(vec2(rho, ax), Hh, M), sdSeg2(vec2(rho, ax), M, Tp));
+  return dd - 0.02 - 0.05*smoothstep(0.4*L, L, length(vec2(rho,ax)-Hh));
+}
+float semilunar(vec3 q, vec3 C, vec3 U, vec3 V, vec3 N, float R, float open){
+  vec3 w = q - C; float ax = dot(w, N); vec2 pl = vec2(dot(w,U), dot(w,V)); float rho = length(pl);
+  vec2 tip = mix(vec2(0.05, 0.42), vec2(R - 0.16, 1.3), open);
+  vec2 mid = mix(vec2(R*0.5, -0.05), vec2(R - 0.1, 0.65), open);
+  float d1 = min(sdSeg2(vec2(rho, ax), vec2(R, 0.0), mid), sdSeg2(vec2(rho, ax), mid, tip));
+  float dy = 1e3;
+  for (int k = 0; k < 3; k++){
+    float a = float(k)*2.0944 + 0.5;
+    vec2 dir = vec2(cos(a), sin(a));
+    float al = dot(pl, dir), pe = abs(dot(pl, vec2(-dir.y, dir.x)));
+    if (al > 0.0 && al < R) dy = min(dy, max(pe, abs(ax - 0.22 - 0.2*(al/R)) - 0.2));
+  }
+  dy += open*2.0;
+  return min(d1 - 0.03, dy - 0.02);
+}
+float valveSDF(vec3 q){
+  float d = funnelValve(q, MV_C, MV_U, MV_V, MV_N, 1.6, vec2(-0.45, 0.0), uMV, 0.2);
+  d = min(d, funnelValve(q, TV_C, TV_U, TV_V, TV_N, 1.75, vec2(0.0, 0.0), uTV, 0.22));
+  d = min(d, semilunar(q, AV_C, AV_U, AV_V, AV_N, 1.12, uAV));
+  d = min(d, semilunar(q, PV_C, PV_U, PV_V, PV_N, 1.12, uPV));
+  return d;
+}
+// chordae from papillary heads to mitral leaflet free edges
+float chordae(vec3 q){
+  float th = mix(0.2, 1.22, uMV);
+  float d = 1e3;
+  for (int i = 0; i < 4; i++){
+    vec3 pm = i < 2 ? PM1 : PM2;
+    vec2 base = normalize(pm.xy - (MV_C.xy));
+    float a = (i == 0 || i == 2) ? 0.45 : -0.45;
+    vec2 dir = vec2(base.x*cos(a) - base.y*sin(a), base.x*sin(a) + base.y*cos(a));
+    float R = 1.35;
+    vec3 tip = MV_C + vec3(dir*(R - R*1.03*cos(th)) + vec2(-0.45,0.0)*0.0, 0.0) - MV_N*(R*1.03*sin(th));
+    d = min(d, sdCapsule(q, pm, tip, 0.035));
+  }
+  return d;
+}
+`;
+}
+
+// ---- echo fragment shader ----
+function echoFrag() {
+  return `#version 300 es
+${glslCommon()}
+uniform vec2 uRes; uniform vec3 uO, uB, uL; uniform float uDepth, uHalf, uGain, uTee, uFrame, uDebug;
+vec3 dbg = vec3(-1.0);
+in vec2 vUv; out vec4 frag;
+
+vec3 hash33(vec3 p){ p = vec3(dot(p,vec3(127.1,311.7,74.7)), dot(p,vec3(269.5,183.3,246.1)), dot(p,vec3(113.5,271.9,124.6))); return -1.0 + 2.0*fract(sin(p)*43758.5453123); }
+float gnoise(vec3 p){
+  vec3 i = floor(p), f = fract(p); vec3 u = f*f*(3.0-2.0*f);
+  return mix(mix(mix(dot(hash33(i+vec3(0,0,0)),f-vec3(0,0,0)), dot(hash33(i+vec3(1,0,0)),f-vec3(1,0,0)),u.x),
+                 mix(dot(hash33(i+vec3(0,1,0)),f-vec3(0,1,0)), dot(hash33(i+vec3(1,1,0)),f-vec3(1,1,0)),u.x),u.y),
+             mix(mix(dot(hash33(i+vec3(0,0,1)),f-vec3(0,0,1)), dot(hash33(i+vec3(1,0,1)),f-vec3(1,0,1)),u.x),
+                 mix(dot(hash33(i+vec3(0,1,1)),f-vec3(0,1,1)), dot(hash33(i+vec3(1,1,1)),f-vec3(1,1,1)),u.x),u.y),u.z);
+}
+float hash12(vec2 p){ vec3 p3 = fract(vec3(p.xyx)*0.1031); p3 += dot(p3, p3.yzx+33.33); return fract((p3.x+p3.y)*p3.z); }
+
+// ---- body (unwarped) ----
+const float RIB0 = 6.0; const float RIBS = 0.42;
+float torsoE(vec3 p){ return pow((p.x+1.0)/16.0,2.0) + pow((p.y+1.0)/8.6,2.0); }
+float skinDepth(vec3 p){ // approx distance below skin
+  vec2 g = vec2((p.x+1.0)/256.0, (p.y+1.0)/73.96)*2.0; float f = torsoE(p) - 1.0; return -f/max(length(g),1e-4);
+}
+float diaZ(vec3 p){ return -6.2 - 0.010*pow(p.x+3.0,2.0) - 0.01*p.y*p.y; }
+float heartEnv(vec3 p){ vec3 h = toH(p); return sdEllipsoid(h - vec3(-1.0,0.2,-1.7), vec3(5.4,5.0,7.9)); }
+float boneAt(vec3 p){
+  float sd = skinDepth(p);
+  if (p.y < -1.0) { return length(vec2(p.x+1.0, p.y+10.2)) < 2.1 ? 1.0 : 0.0; }
+  if (sd > 0.9 && sd < 2.2 && abs(p.x+1.2) < 1.2 && p.z > -8.6 && p.z < 9.0) return 1.0; // sternum
+  float X = abs(p.x + 1.0);
+  if (sd > 1.55 && sd < 2.4 && p.z > -9.6 && X > 1.0) {
+    float kf = clamp(floor((RIB0 - RIBS*X - p.z)/3.3 + 0.5), 0.0, 6.0);
+    float zk = RIB0 - 3.3*kf - RIBS*X;
+    if (abs(p.z - zk) < 0.58) return 1.0;
+  }
+  return 0.0;
+}
+float lungAt(vec3 p){
+  if (torsoE(p) > 1.0) return 0.0;
+  if (skinDepth(p) < 2.45) return 0.0;
+  if (p.z < diaZ(p) + 0.45 || p.z > 13.0) return 0.0;
+  float rl = sdEllipsoid(p - vec3(-9.0,-1.5,2.5), vec3(7.2,8.0,10.5));
+  float ll = sdEllipsoid(p - vec3(8.8,-2.0,2.5), vec3(6.6,7.6,10.0));
+  if (min(rl, ll) > 0.0) return 0.0;
+  if (heartEnv(p) < 0.4) return 0.0;
+  if (sdCapsule(p, vec3(0.4,6.8,2.6), vec3(7.4,5.0,-7.6), 3.3) < 0.0) return 0.0; // cardiac notch
+  if (length(vec2(p.x-1.6, p.y+6.0)) < 2.2 || length(vec2(p.x+0.4, p.y+5.1)) < 1.8) return 0.0; // aorta, esophagus
+  if (abs(p.x+1.0) < 3.2 && p.y < -7.0) return 0.0; // spine
+  if (abs(p.x+1.5) < 2.6 && p.z > 2.0 && p.y > -6.0 && p.y < 3.5) return 0.0; // superior mediastinum
+  return 1.0;
+}
+
+float hash31(vec3 p){ p = fract(p*vec3(0.1031,0.1030,0.0973)); p += dot(p, p.yxz+33.33); return fract((p.x+p.y)*p.z); }
+float vnoise(vec3 p){
+  vec3 i = floor(p), f = fract(p); vec3 u = f*f*(3.0-2.0*f);
+  return mix(mix(mix(hash31(i), hash31(i+vec3(1,0,0)), u.x), mix(hash31(i+vec3(0,1,0)), hash31(i+vec3(1,1,0)), u.x), u.y),
+             mix(mix(hash31(i+vec3(0,0,1)), hash31(i+vec3(1,0,1)), u.x), mix(hash31(i+vec3(0,1,1)), hash31(i+vec3(1,1,1)), u.x), u.y), u.z);
+}
+float speck(vec3 m, vec3 Bm, vec3 Lm, vec3 Nm, float r){
+  float fl = 3.4/(1.0 + 0.045*r);
+  vec3 x = vec3(dot(m,Bm)*7.5, dot(m,Lm)*fl, dot(m,Nm)*4.0);
+  float a = vnoise(x), b = vnoise(x*1.9 + vec3(5.2,1.3,7.7));
+  float c = vnoise(x*0.45 + vec3(2.1,9.4,3.3));
+  float v = a*0.65 + b*0.35;
+  return pow(v, 2.2)*3.6*(0.75 + 0.5*c);
+}
+void main(){
+  vec2 fc = vUv*uRes;
+  float topPad = uRes.y*0.035;
+  float pxPerCm = (uRes.y - topPad - uRes.y*0.15)/uDepth;
+  vec2 o = vec2(uRes.x*0.5, uRes.y - topPad);
+  vec2 v = vec2(fc.x - o.x, o.y - fc.y)/pxPerCm;
+  float r = length(v); float a = atan(v.x, v.y);
+  float apod = smoothstep(uHalf, uHalf - 0.025, abs(a));
+  if (r > uDepth || abs(a) > uHalf || v.y < -0.1) { frag = vec4(0,0,0,1); return; }
+  vec3 dir = normalize(cos(a)*uB + sin(a)*uL);
+  vec3 P = uO + r*dir;
+  vec3 N = normalize(cross(uB, uL));
+
+  // transmission along the scan line
+  float T = 1.0; float airD = -1.0; float boneHit = 0.0; float boneLen = 0.0;
+  if (uTee < 0.5) {
+    float rmax = min(r, 3.0); float firstR = -1.0;
+    for (int i = 1; i <= 36; i++){
+      float ri = rmax*float(i)/36.0;
+      if (boneAt(uO + ri*dir) > 0.5) { boneLen += rmax/36.0; if (firstR < 0.0) firstR = ri; }
+    }
+    if (firstR > 0.0) {
+      float lo = firstR - rmax/36.0, hi = firstR;
+      for (int j = 0; j < 5; j++){ float m = 0.5*(lo+hi); if (boneAt(uO + m*dir) > 0.5) hi = m; else lo = m; }
+      boneHit = hi;
+    }
+    T *= exp(-3.2*boneLen);
+  }
+  { // spine: vertical cylinder
+    vec2 oc = uO.xy - vec2(-1.0,-10.2); vec2 dd = dir.xy; float A2 = dot(dd,dd), B2 = dot(oc,dd), C2 = dot(oc,oc) - 4.41;
+    float disc = B2*B2 - A2*C2;
+    if (disc > 0.0 && A2 > 1e-5) { float ts = (-B2 - sqrt(disc))/A2; if (ts > 0.0 && ts < r) { T *= 0.06; if (boneHit == 0.0) boneHit = ts; } }
+  }
+  {
+    float prevR = 0.0, ri = 0.0, hit = -1.0;
+    for (int i = 0; i < 64; i++){
+      ri += 0.35; if (ri > r) break;
+      if ((uTee < 0.5 || ri > 1.5) && lungAt(uO + ri*dir) > 0.5) { hit = ri; break; }
+      prevR = ri;
+    }
+    if (hit > 0.0) {
+      float lo = prevR, hi = hit;
+      for (int j = 0; j < 6; j++){ float m = 0.5*(lo+hi); if (lungAt(uO + m*dir) > 0.5) hi = m; else lo = m; }
+      airD = hi;
+    }
+  }
+  float boneSurf = (boneHit > 0.0 && r > boneHit - 0.05 && r < boneHit + 0.22) ? 1.0 : 0.0;
+
+  vec3 Bh = toH(uB), Lh = toH(uL), Nh = toH(N);
+  float sd = skinDepth(P);
+  // ---- body tissues (unwarped) ----
+  float Eb = 0.2; float spb = speck(P, uB, uL, N, r);
+  {
+    if (torsoE(P) > 1.0) Eb = 0.0;
+    else if (uTee < 0.5 && sd < 0.18) Eb = 0.85;
+    else if (uTee < 0.5 && sd < 1.0) Eb = 0.26 + 0.42*smoothstep(0.7,1.0, sin(sd*9.0 + 0.5*sin(P.x*0.7+P.z*0.5)));
+    else if (uTee < 0.5 && sd < 1.6) Eb = 0.42 + 0.16*sin(sd*22.0 + P.x);
+    else {
+      float dz = P.z - diaZ(P);
+      bool belowD = dz < 0.0;
+      float ivc = dIVC(toH(P));
+      float hv = 1e3;
+${AN.hv.map((s) => `      hv = min(hv, sdRoundCone(P, ${v3(s[0])}, ${v3(s[1])}, 0.55, 0.3));`).join('\n')}
+      float dao = sdCapsule(P, vec3(1.6,-6.0,-20.0), vec3(1.6,-6.0,3.0), 1.15);
+      float eso = length(vec2(P.x+0.4, P.y+5.1)) - 0.85;
+      float stom = sdEllipsoid(P - vec3(5.0,-1.6,-11.6), vec3(4.6,3.6,3.4));
+      float liver = sdEllipsoid(P - vec3(-3.2,1.0,-12.5), vec3(9.5,7.0,6.6));
+      float vess = belowD ? min(ivc, hv) : 1e3;
+      if (abs(dz) < 0.2) Eb = 0.9;
+      else if (dao < 0.0) Eb = 0.015;
+      else if (dao < 0.22) Eb = 0.75;
+      else if (eso < 0.0) Eb = 0.45;
+      else if (vess < 0.0) Eb = 0.015;
+      else if (vess < 0.1) Eb = 0.7;
+      else if (belowD && liver < 0.0) { Eb = 0.3; spb = 0.45 + 0.65*spb; }
+      else if (belowD && stom < 0.0) Eb = stom > -0.4 ? 0.55 : 0.14;
+      else if (belowD) Eb = 0.24;
+      else Eb = 0.11;
+    }
+  }
+  float E = Eb; float sp = spb; float specB = 0.0;
+  bool inHeart = false;
+  // ---- heart (evaluated everywhere so screen derivatives are valid) ----
+  vec3 q = warpInv(toH(P));
+  H3 s = heartSDF(q);
+  // endocardial trabeculation (ventricles), fixed to tissue
+  float trab = gnoise(q*vec3(2.2,2.2,0.9))*0.09 + gnoise(q*5.0)*0.04;
+  float bl = s.blood + ((s.bid <= 1) ? trab*(s.bid == 1 ? 1.6 : 1.0) : 0.0);
+  float val = valveSDF(q);
+  float ch = chordae(q);
+  float outerSm = smin(s.lvEpi, s.wall, 0.9);
+  float peri = outerSm - 0.28;
+  // beam-shaped blur: boundaries along the lateral direction are softer and widen with depth
+  vec2 lat = vec2(cos(a), -sin(a));
+  float wAx = 0.045, wLat = 0.06 + 0.010*r;
+  vec2 gB = vec2(dFdx(bl), dFdy(bl)); vec2 gW = vec2(dFdx(s.wall), dFdy(s.wall)); vec2 gP = vec2(dFdx(peri), dFdy(peri));
+  float lb = length(gB), lw = length(gW), lp = length(gP);
+  float wB = mix(wAx, wLat, lb > 1e-6 ? abs(dot(gB/lb, lat)) : 0.5);
+  float wW = mix(wAx, wLat, lw > 1e-6 ? abs(dot(gW/lw, lat)) : 0.5);
+  float wP = mix(wAx, wLat, lp > 1e-6 ? abs(dot(gP/lp, lat)) : 0.5);
+  float facing = lb > 1e-6 ? abs(dot(gB/lb, vec2(sin(a), cos(a)))) : 0.0;
+  if (heartEnv(P) < 1.5) {
+    float sacF = smoothstep(wP, -wP, peri) * smoothstep(5.4, 4.8, q.z);
+    float sph = speck(q, Bh, Lh, Nh, r);
+    float ev = s.id == 0 ? 0.5 : s.id == 1 ? 0.52 : s.id == 2 ? 0.6 : s.id == 3 ? 0.6 : s.id == 4 ? 0.75 : s.id == 5 ? 0.62 : (s.id == 6 || s.id == 8) ? 0.58 : 0.8;
+    float smoke = 0.01 + 0.03*max(0.0, gnoise(q*2.6 + vec3(0.0, uTime*0.9, uTime*0.4)));
+    float shell = exp(-pow((peri + 0.06)/max(wP*0.9, 0.05), 2.0));
+    float Esac = 0.2 + 1.1*shell;
+    float wallF = smoothstep(wW, -wW, s.wall);
+    float bloodF = smoothstep(wB, -wB, bl);
+    E = mix(Eb, Esac, sacF);
+    sp = mix(spb, mix(sph, 0.8 + 0.25*sph, shell), sacF);
+    E = mix(E, ev, wallF); sp = mix(sp, sph, wallF);
+    E = mix(E, smoke, bloodF); sp = mix(sp, 0.5 + 0.9*abs(sph), bloodF);
+    inHeart = sacF > 0.5 || wallF > 0.5 || bloodF > 0.5;
+    if (s.blood < 0.0) dbg = s.bid==0?vec3(.8,.1,.1):s.bid==1?vec3(.1,.2,.9):s.bid==2?vec3(1.,.5,0.):s.bid==3?vec3(0.,.8,.8):s.bid==4?vec3(.9,.9,0.):vec3(.6,0.,.8);
+    else if (s.wall < 0.0) dbg = s.id==0?vec3(.5,.3,.3):s.id==1?vec3(.3,.3,.6):s.id==4?vec3(.6,.6,.2):s.id==7?vec3(1.,.4,.9):vec3(0.45); else if (sacF > 0.5) dbg = vec3(0.25,0.2,0.1);
+    // specular endocardium where the interface faces the beam
+    float edge = exp(-pow(bl/max(wB*1.3, 0.05), 2.0));
+    specB = edge * (0.04 + 0.75*pow(facing, 3.0)) * (1.0 - 0.5*bloodF);
+    float vd = min(val, ch + 0.025);
+    float vb = smoothstep(0.1, 0.0, vd) * 0.6 + smoothstep(0.05, -0.02, vd) * 0.4;
+    if (vb > 0.5) dbg = vec3(1.0);
+    E = mix(E, 0.85, vb); sp = mix(sp, 0.75 + 0.4*sph, vb);
+  }
+  if (boneSurf > 0.5 && uTee < 0.5) { E = 1.1; sp = 0.8 + 0.4*spb; }
+  if (boneHit > 0.0 && r > boneHit - 0.05 && r < boneHit + 0.22) T = max(T, 0.9);
+
+  if (uDebug > 0.5) {
+    vec3 c = dbg.x >= 0.0 ? dbg : vec3(0.12);
+    if (!inHeart) { if (boneAt(P) > 0.5 && uTee < 0.5) c = vec3(1.0,1.0,0.7); else if (lungAt(P) > 0.5) c = vec3(0.1,0.5,0.1); else if (P.z < diaZ(P)) c = vec3(0.35,0.2,0.1); }
+    c *= (T < 0.5 ? 0.45 : 1.0);
+    frag = vec4(c, 1.0); return;
+  }
+  float I = (E + specB) * sp * T;
+  // lung: pleural line, A-lines, haze
+  if (airD > 0.0) {
+    if (r >= airD) {
+      float rr = r - airD;
+      float aline = 0.0;
+      for (int k = 1; k < 5; k++){ float ak = airD*float(k); aline += exp(-pow((r - ak - airD*0.0)/0.12,2.0))*pow(0.55,float(k)); }
+      float pleura = exp(-pow(rr/0.12,2.0));
+      I = (1.3*pleura + 0.9*aline + 0.035*exp(-rr*0.15)*speck(P, uB, uL, N, r)) * T * (0.7 + 0.6*abs(gnoise(P*vec3(3.0,1.0,3.0) + uTime*0.6)));
+    }
+  }
+  // near-field
+  if (uTee > 0.5 && r < 0.55) I = max(I, 0.55*(0.6 + 0.6*sp));
+  if (uTee < 0.5 && r < 0.35) I += 0.4*(1.0 - r/0.35);
+  // near-field clutter / reverberation haze
+  I += (uTee < 0.5 ? 0.09 : 0.04)*exp(-r/(uTee < 0.5 ? 3.5 : 2.0))*(0.4 + 0.9*abs(gnoise(vec3(r*3.0, a*25.0, uTime*1.3))));
+
+  float att = exp(-0.075*r);
+  float tgc = exp(0.068*r);
+  I *= att*tgc*uGain*apod;
+  float noise = hash12(fc + uFrame*7.13);
+  I += 0.02*noise*(0.4 + r/uDepth);
+  float disp = log(1.0 + 10.0*max(I,0.0))/log(11.0);
+  disp = clamp(pow(disp, 1.6)*1.1, 0.0, 1.0);
+  frag = vec4(vec3(disp)*vec3(1.0, 0.985, 0.95), 1.0);
+}`;
+}
+
+const QUAD_VS = `#version 300 es
+in vec2 aPos; out vec2 vUv; void main(){ vUv = aPos*0.5+0.5; gl_Position = vec4(aPos,0.0,1.0); }`;
+
+if (typeof module !== 'undefined') module.exports = { glslCommon, echoFrag, QUAD_VS };
+
+// ===== 3D view: raymarched heart, torso, probes and the imaging sector =====
+function threeFrag() {
+  return `#version 300 es
+${glslCommon()}
+uniform vec2 uRes; uniform vec3 uCam, uCamF, uCamR, uCamU; uniform float uFov;
+uniform vec3 uO, uB, uL; uniform float uDepth, uHalf, uCut, uSide, uTee, uShowTorso;
+uniform vec3 uPS, uPB, uPL;              // TTE probe: skin point, beam, marker axis
+uniform vec3 uTube[8]; uniform int uTubeN; // TEE shaft polyline (top -> joint)
+uniform vec3 uJ, uTipDir, uTipB;          // TEE joint, tip direction, transducer face normal
+uniform sampler2D uEcho;
+in vec2 vUv; out vec4 frag;
+
+float sdRoundBox(vec3 p, vec3 b, float r){ vec3 q = abs(p) - b + r; return length(max(q,0.0)) + min(max(q.x,max(q.y,q.z)),0.0) - r; }
+float heartBound(vec3 p){
+  float b = sdEllipsoid(toH(p) - vec3(-1.0,0.2,-1.7), vec3(5.6,5.2,8.1));
+  b = min(b, sdCapsule(p, vec3(1.6,-6.0,7.0), vec3(1.6,-6.0,-17.0), 1.7));
+  b = min(b, sdCapsule(p, vec3(-4.0,-1.0,-1.0), vec3(-2.6,-3.0,-19.0), 1.7));
+  b = min(b, sdCapsule(p, vec3(-3.9,-0.4,2.0), vec3(-3.7,-0.1,11.0), 1.5));
+  b = min(b, sdCapsule(p, vec3(-3.0,2.8,5.6), vec3(1.4,-4.4,7.6), 2.2));
+  return b;
+}
+vec2 probeSDF(vec3 p){
+  if (uTee < 0.5) {
+    vec3 N = normalize(cross(uPB, uPL));
+    vec3 w = p - uPS; float u = dot(w, uPL), v = dot(w, N), h = -dot(w, uPB);
+    float head = sdRoundBox(vec3(u, v, h - 0.95), vec3(1.2, 0.7, 0.95), 0.32);
+    float neck = sdRoundBox(vec3(u, v, h - 2.4), vec3(1.0, 0.62, 0.6), 0.4);
+    float grip = sdRoundBox(vec3(u*(1.0+0.03*(h-3.0)), v, h - 5.6), vec3(0.92, 0.7, 2.9), 0.55);
+    float cable = sdCapsule(vec3(u,v,h), vec3(0,0,8.4), vec3(0,0,16.0), 0.3);
+    float body = min(min(head, neck), min(grip, cable));
+    float mk = length(vec3(u - 1.3, v, h - 1.5)) - 0.2;
+    if (mk < body) return vec2(mk, 4.0);
+    return vec2(body, h < 0.18 ? 3.0 : 2.0);
+  } else {
+    float d = 1e3;
+    for (int i = 0; i < 7; i++) { if (i + 1 >= uTubeN) break; d = min(d, sdCapsule(p, uTube[i], uTube[i+1], 0.45)); }
+    vec3 tipEnd = uJ + uTipDir*2.6;
+    float tip = sdCapsule(p, uJ, tipEnd, 0.58);
+    float win = sdCapsule(p, uJ + uTipDir*0.8 + uTipB*0.38, uJ + uTipDir*1.9 + uTipB*0.38, 0.3);
+    if (tip < d) { return vec2(tip, win < 0.04 ? 3.0 : 5.0); }
+    return vec2(d, 5.0);
+  }
+}
+vec2 mapS(vec3 p){
+  vec2 res = probeSDF(p);
+  float hb = heartBound(p);
+  float hd;
+  if (hb > 0.6) hd = hb;
+  else {
+    H3 s = heartSDF(warpInv(toH(p)));
+    hd = s.wall*0.8;
+  }
+  if (uCut > 0.5) hd = max(hd, uSide*dot(normalize(cross(uB,uL)), p - uO));
+  if (hd < res.x) res = vec2(hd, 1.0);
+  return res;
+}
+vec3 calcN(vec3 p){
+  vec2 e = vec2(1.0,-1.0)*0.02;
+  return normalize(e.xyy*mapS(p+e.xyy).x + e.yyx*mapS(p+e.yyx).x + e.yxy*mapS(p+e.yxy).x + e.xxx*mapS(p+e.xxx).x);
+}
+vec3 heartColor(vec3 p, vec3 n, out float spec){
+  vec3 q = warpInv(toH(p)); H3 s = heartSDF(q);
+  vec3 N = normalize(cross(uB,uL));
+  spec = 0.5;
+  if (uCut > 0.5 && abs(dot(N, p - uO)) < 0.04) {
+    float v = valveSDF(q);
+    if (v < 0.05) return vec3(0.92,0.88,0.8);
+    if (s.blood < 0.0) return vec3(0.32,0.03,0.05);
+    return vec3(0.72,0.33,0.31);
+  }
+  vec3 myo = vec3(0.6,0.15,0.14);
+  vec3 c = s.id == 0 ? myo : s.id == 1 ? myo*vec3(1.05,1.0,1.0) : s.id == 2 ? vec3(0.55,0.2,0.24) : s.id == 3 ? vec3(0.5,0.17,0.24)
+         : s.id == 4 ? vec3(0.78,0.16,0.13) : s.id == 5 ? vec3(0.16,0.3,0.78) : s.id == 6 ? vec3(0.14,0.27,0.76) : s.id == 8 ? vec3(0.72,0.14,0.14) : vec3(0.86,0.72,0.42);
+  // epicardial fat in the atrioventricular and interventricular grooves
+  float avg = exp(-pow((q.z - 0.25)/0.7, 2.0)) * step(float(s.id), 1.5);
+  vec2 sepDir = normalize(vec2(-0.83, 0.56));
+  float ivg = exp(-pow(abs(dot(normalize(q.xy+1e-4), vec2(-sepDir.y, sepDir.x)))*3.2, 2.0)) * smoothstep(0.0, -1.0, q.z) * step(float(s.id), 1.5) * step(0.0, dot(q.xy, sepDir));
+  c = mix(c, vec3(0.9,0.78,0.45), clamp(avg*0.75 + ivg*0.6, 0.0, 0.85));
+  // subtle surface mottling
+  c *= 0.9 + 0.1*sin(q.x*3.1 + sin(q.y*2.3) + q.z*1.7);
+  return c;
+}
+const float RIB0 = 6.0; const float RIBS = 0.42;
+float ribMask(vec3 p){
+  if (p.y < -1.0) return 0.0;
+  float X = abs(p.x + 1.0);
+  if (abs(p.x+1.2) < 1.2 && p.z > -8.6 && p.z < 9.0) return 1.0;
+  if (p.z < -9.6 || X < 1.0) return 0.0;
+  float kf = clamp(floor((RIB0 - RIBS*X - p.z)/3.3 + 0.5), 0.0, 6.0);
+  float zk = RIB0 - 3.3*kf - RIBS*X;
+  return smoothstep(0.62, 0.45, abs(p.z - zk));
+}
+void main(){
+  vec2 uv = (vUv*2.0 - 1.0); uv.x *= uRes.x/uRes.y;
+  vec3 ro = uCam, rd = normalize(uCamF + (uv.x*uCamR + uv.y*uCamU)*tan(uFov*0.5));
+  // background
+  vec3 col = mix(vec3(0.045,0.055,0.065), vec3(0.09,0.105,0.12), vUv.y);
+  float tHit = 1e9; vec2 hit = vec2(0.0);
+  float t = 1.0;
+  for (int i = 0; i < 110; i++){
+    vec3 p = ro + rd*t;
+    vec2 h = mapS(p);
+    if (h.x < 0.004*t) { tHit = t; hit = h; break; }
+    t += h.x;
+    if (t > 120.0) break;
+  }
+  vec3 Ld = normalize(-uCamF*0.55 + uCamU*0.65 - uCamR*0.45);
+  if (tHit < 1e8) {
+    vec3 p = ro + rd*tHit; vec3 n = calcN(p);
+    vec3 base; float spw = 0.4, shin = 30.0;
+    if (hit.y == 1.0) { float s; base = heartColor(p, n, s); spw = 0.45; shin = 48.0; }
+    else if (hit.y == 3.0) { base = vec3(0.62,0.66,0.7); spw = 0.2; }
+    else if (hit.y == 4.0) { base = vec3(0.95,0.7,0.2); spw = 0.6; }
+    else if (hit.y == 5.0) { base = vec3(0.07,0.07,0.075); spw = 0.5; shin = 60.0; }
+    else { base = vec3(0.16,0.17,0.19); spw = 0.35; shin = 40.0; }
+    float dif = clamp(dot(n, Ld)*0.5 + 0.5, 0.0, 1.0); dif = dif*dif;
+    float fil = clamp(dot(n, normalize(vec3(0.3,-0.4,-0.5))), 0.0, 1.0);
+    vec3 hv = normalize(Ld - rd);
+    float sp = pow(clamp(dot(n, hv), 0.0, 1.0), shin)*spw;
+    float rim = pow(1.0 - clamp(dot(n, -rd), 0.0, 1.0), 3.0);
+    col = base*(0.18 + 0.95*dif + 0.15*fil) + vec3(sp) + rim*0.12*vec3(0.7,0.8,0.9);
+  }
+  // imaging sector with the live echo
+  vec3 N = normalize(cross(uB,uL));
+  float dn = dot(rd, N);
+  if (abs(dn) > 1e-4) {
+    float tp = dot(uO - ro, N)/dn;
+    if (tp > 0.0 && tp < tHit + 0.35) {
+      vec3 x = ro + rd*tp; vec3 v = x - uO;
+      float al = dot(v, uB), la = dot(v, uL); float r = length(vec2(al, la)); float a = atan(la, al);
+      if (al > 0.0 && r < uDepth && abs(a) < uHalf) {
+        vec2 res = vec2(textureSize(uEcho, 0));
+        float topPad = res.y*0.035; float ppc = (res.y - topPad - res.y*0.15)/uDepth;
+        vec2 px = vec2(res.x*0.5 + la*ppc, topPad + al*ppc);
+        vec3 e = texture(uEcho, px/res).rgb;
+        float edge = max(smoothstep(0.03, 0.0, uHalf - abs(a)), smoothstep(uDepth - 0.12, uDepth, r));
+        vec3 fan = mix(e*1.25 + vec3(0.02,0.05,0.07), vec3(0.45,0.85,0.95), edge*0.8);
+        col = mix(col, fan, 0.9);
+      }
+    }
+  }
+  // translucent torso with ribs
+  if (uShowTorso > 0.5) {
+    vec2 o2 = vec2((ro.x+1.0)/16.0, (ro.y+1.0)/8.6), d2 = vec2(rd.x/16.0, rd.y/8.6);
+    float A = dot(d2,d2), B = dot(o2,d2), C = dot(o2,o2) - 1.0; float disc = B*B - A*C;
+    if (disc > 0.0 && A > 1e-6) {
+      float sq = sqrt(disc);
+      for (int k = 0; k < 2; k++) {
+        float ts = k == 0 ? (-B + sq)/A : (-B - sq)/A; // far face first, then near
+        vec3 x = ro + rd*ts;
+        if (ts > 0.0 && ts < tHit && x.z > -17.0 && x.z < 12.0) {
+          vec3 n = normalize(vec3((x.x+1.0)/256.0, (x.y+1.0)/73.96, 0.0));
+          float fr = pow(1.0 - abs(dot(n, rd)), 2.5);
+          float rm = ribMask(x);
+          float alpha = (k == 0 ? 0.02 : 0.04) + 0.16*fr + rm*0.13*(k == 0 ? 0.4 : 1.0);
+          vec3 skin = mix(vec3(0.82,0.66,0.58), vec3(0.93,0.9,0.84), rm);
+          float ln = 0.5 + 0.5*dot(n, Ld);
+          col = mix(col, skin*(0.45 + 0.55*ln), alpha);
+        }
+      }
+    }
+  }
+  col = pow(col, vec3(0.92));
+  frag = vec4(col, 1.0);
+}`;
+}
+if (typeof module !== 'undefined') module.exports = { threeFrag };
+
+// ===== App: state, controls, rendering loop =====
+(function () {
+  const $ = (id) => document.getElementById(id);
+  const echoCv = $('echo'), ovCv = $('ov'), c3 = $('c3');
+  const gl = echoCv.getContext('webgl2', { antialias: false, preserveDrawingBuffer: true });
+  const g3 = c3.getContext('webgl2', { antialias: false });
+  if (!gl || !g3) { document.querySelector('.stage').innerHTML = '<p class="err">This simulator needs WebGL 2. Open it in a current version of Chrome, Safari, Edge or Firefox.</p>'; return; }
+
+  function program(g, fs) {
+    const mk = (t, src) => { const s = g.createShader(t); g.shaderSource(s, src); g.compileShader(s); if (!g.getShaderParameter(s, g.COMPILE_STATUS)) throw new Error(g.getShaderInfoLog(s)); return s; };
+    const p = g.createProgram(); g.attachShader(p, mk(g.VERTEX_SHADER, QUAD_VS)); g.attachShader(p, mk(g.FRAGMENT_SHADER, fs)); g.linkProgram(p);
+    if (!g.getProgramParameter(p, g.LINK_STATUS)) throw new Error(g.getProgramInfoLog(p));
+    g.useProgram(p);
+    const b = g.createBuffer(); g.bindBuffer(g.ARRAY_BUFFER, b); g.bufferData(g.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), g.STATIC_DRAW);
+    const l = g.getAttribLocation(p, 'aPos'); g.enableVertexAttribArray(l); g.vertexAttribPointer(l, 2, g.FLOAT, false, 0, 0);
+    const cache = {}; const U = (n) => (n in cache ? cache[n] : (cache[n] = g.getUniformLocation(p, n)));
+    return { p, U };
+  }
+  let PE, P3;
+  try { PE = program(gl, echoFrag()); P3 = program(g3, threeFrag()); }
+  catch (e) { console.error(e); document.querySelector('.stage').innerHTML = '<p class="err">The graphics shaders could not start on this device. Try another browser.</p>'; return; }
+  const tex = g3.createTexture();
+  g3.bindTexture(g3.TEXTURE_2D, tex);
+  g3.texParameteri(g3.TEXTURE_2D, g3.TEXTURE_MIN_FILTER, g3.LINEAR); g3.texParameteri(g3.TEXTURE_2D, g3.TEXTURE_MAG_FILTER, g3.LINEAR);
+  g3.texParameteri(g3.TEXTURE_2D, g3.TEXTURE_WRAP_S, g3.CLAMP_TO_EDGE); g3.texParameteri(g3.TEXTURE_2D, g3.TEXTURE_WRAP_T, g3.CLAMP_TO_EDGE);
+
+  // ---- presets ----
+  const TTE = buildTTEPresets();
+  const TEE = solveAllTEE();
+  const LABELS = labelPoints();
+
+  const st = {
+    mode: 'tte', playing: true, hr: 72, gain: 50, labels: true, cut: false, skin: true, phase: 0, time: 0,
+    tte: { view: 'A4C', dx: 0, dz: 0, rot: 0, tilt: 0, rock: 0, depth: TTE.A4C.depth },
+    tee: { view: 'ME 4C', ...pick(TEE['ME 4C']), D: TEE['ME 4C'].D },
+    cam: { yaw: 0.75, pitch: 0.38, dist: 56 },
+  };
+  function pick(r) { return { depth: r.depth, turn: r.turn, flex: r.flex, omni: r.omni }; }
+
+  function ttePose() {
+    const t = st.tte, base = TTE[t.view];
+    const sk = skinPoint(base.O[0] + t.dx, base.O[2] + t.dz).S;
+    const S = base.win === 'sub' ? V3.add(sk, [0, -0.3, 0]) : sk;
+    const B0 = base.B, L0 = base.L, R = Math.PI / 180;
+    const L1 = V3.rot(L0, B0, t.rot * R);
+    const B2 = V3.rot(B0, L1, t.tilt * R);
+    const N2 = V3.norm(V3.cross(B2, L1));
+    const B3 = V3.rot(B2, N2, t.rock * R), L3 = V3.rot(L1, N2, t.rock * R);
+    return { O: S, B: V3.norm(B3), L: V3.norm(L3), D: t.depth };
+  }
+  function curPose() {
+    if (st.mode === 'tte') return ttePose();
+    const p = teePose(st.tee); p.D = st.tee.D; return p;
+  }
+  function samplePts(p) {
+    const out = [];
+    for (const r of [3, 6, 9, 12]) for (const a of [-0.45, 0, 0.45]) out.push(V3.add(p.O, V3.add(V3.mul(p.B, r * Math.cos(a)), V3.mul(p.L, r * Math.sin(a)))));
+    return out;
+  }
+  function nearest(p) {
+    const cur = samplePts(p);
+    let best = null;
+    const list = st.mode === 'tte' ? Object.keys(TTE).map((k) => [k, { O: TTE[k].O, B: TTE[k].B, L: TTE[k].L }]) : Object.keys(TEE).map((k) => [k, teePose(TEE[k])]);
+    for (const [k, q] of list) {
+      const ref = samplePts(q); let s = 0;
+      for (let i = 0; i < ref.length; i++) s += V3.len(V3.sub(ref[i], cur[i]));
+      s /= ref.length;
+      if (!best || s < best.s) best = { k, s };
+    }
+    return best;
+  }
+
+  // ---- controls ----
+  const sliderDefs = {
+    tte: [
+      { k: 'dx', lab: 'Slide', min: -6, max: 6, step: 0.1, fmt: (v) => v.toFixed(1) + ' cm', ends: ['Pt right', 'Pt left'] },
+      { k: 'dz', lab: 'Slide', min: -6, max: 6, step: 0.1, fmt: (v) => v.toFixed(1) + ' cm', ends: ['Caudal', 'Cranial'] },
+      { k: 'rot', lab: 'Rotate', min: -180, max: 180, step: 1, fmt: (v) => v.toFixed(0) + '°', ends: ['Counterclockwise', 'Clockwise'], nudge: 5 },
+      { k: 'tilt', lab: 'Tilt (fan)', min: -60, max: 60, step: 1, fmt: (v) => v.toFixed(0) + '°', ends: ['', ''] },
+      { k: 'rock', lab: 'Rock', min: -45, max: 45, step: 1, fmt: (v) => v.toFixed(0) + '°', ends: ['Toward marker', 'Away'] },
+      { k: 'depth', lab: 'Depth', min: 6, max: 24, step: 0.5, fmt: (v) => v.toFixed(1) + ' cm', ends: ['', ''] },
+    ],
+    tee: [
+      { k: 'depth', lab: 'Advance', min: 20, max: 47, step: 0.1, fmt: (v) => v.toFixed(1) + ' cm', ends: ['Withdraw', 'Advance'], nudge: 1 },
+      { k: 'turn', lab: 'Turn', min: -180, max: 180, step: 1, fmt: (v) => v.toFixed(0) + '°', ends: ['Left', 'Right'], nudge: 5 },
+      { k: 'flex', lab: 'Flex', min: -40, max: 100, step: 1, fmt: (v) => v.toFixed(0) + '°', ends: ['Retroflex', 'Anteflex'], nudge: 5 },
+      { k: 'omni', lab: 'Omniplane', min: 0, max: 180, step: 1, fmt: (v) => v.toFixed(0) + '°', ends: ['0°', '180°'], nudge: 5 },
+      { k: 'D', lab: 'Depth', min: 4, max: 20, step: 0.5, fmt: (v) => v.toFixed(1) + ' cm', ends: ['', ''] },
+    ],
+  };
+  const slEls = {};
+  function buildSliders() {
+    const host = $('sliders'); host.innerHTML = ''; for (const k in slEls) delete slEls[k];
+    for (const d of sliderDefs[st.mode]) {
+      const id = `s_${st.mode}_${d.k}`;
+      const w = document.createElement('div'); w.className = 'sl';
+      w.innerHTML = `<div class="lab"><label for="${id}">${d.lab}</label><span id="${id}_v"></span></div>` +
+        `<div class="row">${d.nudge ? `<button class="nudge" data-d="-1" aria-label="${d.lab} minus ${d.nudge}">−</button>` : ''}<input type="range" id="${id}" min="${d.min}" max="${d.max}" step="${d.step}">${d.nudge ? `<button class="nudge" data-d="1" aria-label="${d.lab} plus ${d.nudge}">+</button>` : ''}</div>` +
+        (d.ends[0] || d.ends[1] ? `<div class="ends"><span>${d.ends[0]}</span><span>${d.ends[1]}</span></div>` : '');
+      host.appendChild(w);
+      const inp = w.querySelector('input');
+      const set = (v) => { v = Math.max(d.min, Math.min(d.max, v)); st[st.mode][d.k] = v; inp.value = v; $(`${id}_v`).textContent = d.fmt(v); dirty = true; };
+      inp.addEventListener('input', () => set(parseFloat(inp.value)));
+      w.querySelectorAll('.nudge').forEach((b) => b.addEventListener('click', () => set(st[st.mode][d.k] + d.nudge * parseFloat(b.dataset.d))));
+      slEls[d.k] = { inp, out: $(`${id}_v`), d };
+    }
+    syncSliders();
+  }
+  function syncSliders() { for (const k in slEls) { const { inp, out, d } = slEls[k]; const v = st[st.mode][k]; inp.value = v; out.textContent = d.fmt(v); } }
+  function buildViews() {
+    const host = $('views'); host.innerHTML = '';
+    const names = st.mode === 'tte' ? Object.keys(TTE) : Object.keys(TEE);
+    for (const n of names) {
+      const b = document.createElement('button'); b.className = 'chip'; b.textContent = n; b.dataset.v = n;
+      b.addEventListener('click', () => { setView(n); });
+      host.appendChild(b);
+    }
+    markView();
+  }
+  function markView() { const v = st[st.mode].view; document.querySelectorAll('#views .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.v === v))); }
+  function setView(n) {
+    if (st.mode === 'tte') Object.assign(st.tte, { view: n, dx: 0, dz: 0, rot: 0, tilt: 0, rock: 0, depth: TTE[n].depth });
+    else Object.assign(st.tee, { view: n, ...pick(TEE[n]), D: TEE[n].D });
+    syncSliders(); markView(); dirty = true;
+  }
+  function setMode(m) {
+    st.mode = m; $('mTTE').setAttribute('aria-pressed', String(m === 'tte')); $('mTEE').setAttribute('aria-pressed', String(m === 'tee'));
+    $('viewsTitle').textContent = m === 'tte' ? 'TTE views' : 'TEE views (ASE/SCA)';
+    st.cam = m === 'tte' ? { yaw: 0.75, pitch: 0.38, dist: 56 } : { yaw: 2.3, pitch: 0.25, dist: 40 };
+    buildViews(); buildSliders(); dirty = true;
+  }
+  $('mTTE').addEventListener('click', () => setMode('tte'));
+  $('mTEE').addEventListener('click', () => setMode('tee'));
+  $('play').addEventListener('click', () => { st.playing = !st.playing; $('play').textContent = st.playing ? 'Pause' : 'Play'; $('play').setAttribute('aria-pressed', String(st.playing)); dirty = true; });
+  $('hr').addEventListener('input', (e) => { st.hr = +e.target.value; $('hrV').textContent = st.hr + ' bpm'; });
+  $('gain').addEventListener('input', (e) => { st.gain = +e.target.value; $('gainV').textContent = st.gain; dirty = true; });
+  const toggle = (id, key) => $(id).addEventListener('click', () => { st[key] = !st[key]; $(id).setAttribute('aria-pressed', String(st[key])); dirty = true; });
+  toggle('labels', 'labels'); toggle('cut', 'cut'); toggle('skin', 'skin');
+  $('reset3').addEventListener('click', () => { st.cam = st.mode === 'tte' ? { yaw: 0.75, pitch: 0.38, dist: 56 } : { yaw: 2.3, pitch: 0.25, dist: 40 }; dirty = true; });
+
+  // 3D orbit
+  const ptrs = new Map(); let pinch0 = 0;
+  const v3 = $('v3');
+  v3.addEventListener('pointerdown', (e) => { if (e.target.closest('button')) return; v3.setPointerCapture(e.pointerId); ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY }); v3.style.cursor = 'grabbing'; });
+  v3.addEventListener('pointermove', (e) => {
+    if (!ptrs.has(e.pointerId)) return;
+    const p = ptrs.get(e.pointerId);
+    if (ptrs.size === 1) {
+      st.cam.yaw -= (e.clientX - p.x) * 0.008; st.cam.pitch = Math.max(-1.4, Math.min(1.4, st.cam.pitch + (e.clientY - p.y) * 0.008));
+    }
+    ptrs.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (ptrs.size === 2) {
+      const [a, b] = [...ptrs.values()]; const d = Math.hypot(a.x - b.x, a.y - b.y);
+      if (pinch0) st.cam.dist = Math.max(15, Math.min(90, st.cam.dist * pinch0 / d));
+      pinch0 = d;
+    }
+    dirty = true;
+  });
+  const up = (e) => { ptrs.delete(e.pointerId); pinch0 = 0; v3.style.cursor = 'grab'; };
+  v3.addEventListener('pointerup', up); v3.addEventListener('pointercancel', up);
+  v3.addEventListener('wheel', (e) => { e.preventDefault(); st.cam.dist = Math.max(15, Math.min(90, st.cam.dist * Math.exp(e.deltaY * 0.001))); dirty = true; }, { passive: false });
+
+  // ---- sizing ----
+  let scale3 = 0.6;
+  function resize() {
+    const dpr = Math.min(window.devicePixelRatio || 1, 2);
+    const r = $('scope').getBoundingClientRect();
+    const w = Math.min(Math.round(r.width * dpr), 1000), h = Math.round(w * r.height / r.width);
+    if (echoCv.width !== w || echoCv.height !== h) { echoCv.width = w; echoCv.height = h; ovCv.width = w; ovCv.height = h; ecgBuf = new Float32Array(w).fill(NaN); }
+    const r3 = v3.getBoundingClientRect();
+    const w3 = Math.max(160, Math.round(r3.width * dpr * scale3)), h3 = Math.max(120, Math.round(w3 * r3.height / r3.width));
+    if (c3.width !== w3 || c3.height !== h3) { c3.width = w3; c3.height = h3; }
+    dirty = true;
+  }
+  window.addEventListener('resize', resize);
+
+  // ---- rendering ----
+  let dirty = true, frame = 0, ecgBuf = null, ecgX = 0, lastT = performance.now(), fpsAcc = 0, fps = 0, slow = 0;
+  function renderEcho(p, c) {
+    const U = PE.U; gl.useProgram(PE.p);
+    gl.uniform1f(U('uS'), c.S); gl.uniform1f(U('uDesc'), c.desc); gl.uniform1f(U('uMV'), c.MV); gl.uniform1f(U('uTV'), c.TV); gl.uniform1f(U('uAV'), c.AV); gl.uniform1f(U('uPV'), c.PV);
+    gl.uniform1f(U('uTime'), st.time); gl.uniform2f(U('uRes'), echoCv.width, echoCv.height);
+    gl.uniform3fv(U('uO'), p.O); gl.uniform3fv(U('uB'), p.B); gl.uniform3fv(U('uL'), p.L);
+    gl.uniform1f(U('uDepth'), p.D); gl.uniform1f(U('uHalf'), 0.785); gl.uniform1f(U('uGain'), Math.pow(2, (st.gain - 50) / 22));
+    gl.uniform1f(U('uTee'), st.mode === 'tee' ? 1 : 0); gl.uniform1f(U('uFrame'), frame % 97); gl.uniform1f(U('uDebug'), 0);
+    gl.viewport(0, 0, echoCv.width, echoCv.height); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+  }
+  function render3D(p, c) {
+    const U = P3.U; g3.useProgram(P3.p);
+    g3.bindTexture(g3.TEXTURE_2D, tex);
+    try { g3.texImage2D(g3.TEXTURE_2D, 0, g3.RGBA, g3.RGBA, g3.UNSIGNED_BYTE, echoCv); } catch (e) { }
+    g3.uniform1i(U('uEcho'), 0);
+    g3.uniform1f(U('uS'), c.S); g3.uniform1f(U('uDesc'), c.desc); g3.uniform1f(U('uMV'), c.MV); g3.uniform1f(U('uTV'), c.TV); g3.uniform1f(U('uAV'), c.AV); g3.uniform1f(U('uPV'), c.PV);
+    const cam = st.cam, tgt = st.mode === 'tte' ? [1.5, 2.0, -3.0] : [0.5, -2.0, -2.0];
+    const dir = [Math.sin(cam.yaw) * Math.cos(cam.pitch), Math.cos(cam.yaw) * Math.cos(cam.pitch), Math.sin(cam.pitch)];
+    const pos = V3.add(tgt, V3.mul(dir, cam.dist));
+    const F = V3.norm(V3.sub(tgt, pos)); const R = V3.norm(V3.cross([0, 0, 1], F)); const Up = V3.cross(F, R);
+    g3.uniform2f(U('uRes'), c3.width, c3.height); g3.uniform3fv(U('uCam'), pos); g3.uniform3fv(U('uCamF'), F); g3.uniform3fv(U('uCamR'), R); g3.uniform3fv(U('uCamU'), Up); g3.uniform1f(U('uFov'), 0.75);
+    g3.uniform3fv(U('uO'), p.O); g3.uniform3fv(U('uB'), p.B); g3.uniform3fv(U('uL'), p.L); g3.uniform1f(U('uDepth'), p.D); g3.uniform1f(U('uHalf'), 0.785);
+    const N = V3.norm(V3.cross(p.B, p.L));
+    g3.uniform1f(U('uCut'), st.cut ? 1 : 0); g3.uniform1f(U('uSide'), Math.sign(V3.dot(N, V3.sub(pos, p.O))) || 1); g3.uniform1f(U('uTee'), st.mode === 'tee' ? 1 : 0); g3.uniform1f(U('uShowTorso'), st.skin ? 1 : 0);
+    g3.uniform3fv(U('uPS'), p.O); g3.uniform3fv(U('uPB'), p.B); g3.uniform3fv(U('uPL'), p.L);
+    if (st.mode === 'tee') {
+      const pts = [], sJoint = st.tee.depth - 2.2 - AN.esoDepth0; let acc = 0; const P = AN.esoPath;
+      pts.push(P[0]);
+      for (let i = 0; i < P.length - 1 && pts.length < 7; i++) { const L = V3.len(V3.sub(P[i + 1], P[i])); if (acc + L < sJoint) { pts.push(P[i + 1]); acc += L; } else break; }
+      pts.push(p.joint);
+      const flat = new Float32Array(24); pts.forEach((q, i) => flat.set(q, i * 3));
+      g3.uniform3fv(U('uTube'), flat); g3.uniform1i(U('uTubeN'), pts.length);
+      g3.uniform3fv(U('uJ'), p.joint); g3.uniform3fv(U('uTipDir'), p.tipDir); g3.uniform3fv(U('uTipB'), p.B);
+    } else { g3.uniform1i(U('uTubeN'), 0); }
+    g3.viewport(0, 0, c3.width, c3.height); g3.drawArrays(g3.TRIANGLE_STRIP, 0, 4);
+  }
+
+  const ctx = ovCv.getContext('2d');
+  function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
+  const COL = { accent: css('--accent'), marker: css('--marker'), ecg: css('--ecg'), muted: css('--muted') };
+  function drawOverlay(p, near) {
+    const W = ovCv.width, H = ovCv.height, s = Math.max(W / 640, Math.min(window.devicePixelRatio || 1, 2) * 0.95);
+    ctx.clearRect(0, 0, W, H);
+    const top = H * 0.035, ppc = (H - top - H * 0.15) / p.D, ox = W / 2;
+    ctx.font = `${Math.round(12 * s)}px "IBM Plex Mono", monospace`; ctx.textBaseline = 'top';
+    // index marker
+    ctx.fillStyle = COL.marker; ctx.beginPath(); ctx.arc(ox + p.D * ppc * Math.sin(0.785) * 0.18 + 10 * s, top + 4 * s, 4.5 * s, 0, Math.PI * 2); ctx.fill();
+    // depth scale on the right
+    ctx.strokeStyle = 'rgba(220,230,232,0.7)'; ctx.fillStyle = 'rgba(220,230,232,0.75)'; ctx.lineWidth = Math.max(1, s);
+    const xr = W - 22 * s;
+    for (let d = 0; d <= p.D + 0.01; d += 1) { const y = top + d * ppc; const big = d % 5 === 0; ctx.beginPath(); ctx.moveTo(xr - (big ? 8 : 4) * s, y); ctx.lineTo(xr, y); ctx.stroke(); if (big && d > 0) { ctx.textAlign = 'right'; ctx.fillText(String(d), xr - 10 * s, y - 6 * s); } }
+    ctx.textAlign = 'left';
+    // header text
+    ctx.fillStyle = '#dfe6e8';
+    ctx.font = `600 ${Math.round(13 * s)}px "IBM Plex Sans Condensed", sans-serif`;
+    ctx.fillText(st.mode === 'tte' ? 'TTE  2.5 MHz' : 'TEE  5.0 MHz', 12 * s, 10 * s);
+    ctx.font = `${Math.round(11.5 * s)}px "IBM Plex Mono", monospace`; ctx.fillStyle = 'rgba(220,230,232,0.8)';
+    ctx.fillText(`D ${p.D.toFixed(1)} cm`, 12 * s, 30 * s);
+    ctx.fillText(`G ${st.gain}`, 12 * s, 46 * s);
+    ctx.fillText(`${Math.round(fps) || '--'} Hz`, 12 * s, 62 * s);
+    if (near) {
+      ctx.fillStyle = near.s < 1.6 ? COL.accent : COL.muted;
+      ctx.textAlign = 'right'; ctx.font = `600 ${Math.round(13 * s)}px "IBM Plex Sans Condensed", sans-serif`;
+      ctx.fillText(near.s < 1.6 ? near.k : 'Off-axis', W - 40 * s, 10 * s);
+      ctx.textAlign = 'left';
+    }
+    if (st.mode === 'tee') { // omniplane icon: circle with the imaging plane as a diameter
+      const cx = W - 70 * s, cy = 50 * s, rr = 14 * s, w = st.tee.omni * Math.PI / 180;
+      ctx.strokeStyle = 'rgba(220,230,232,0.7)'; ctx.lineWidth = Math.max(1, s); ctx.beginPath(); ctx.arc(cx, cy, rr, 0, Math.PI * 2); ctx.stroke();
+      ctx.strokeStyle = COL.marker; ctx.lineWidth = 2 * s; ctx.beginPath(); ctx.moveTo(cx - rr * Math.cos(w), cy - rr * Math.sin(w)); ctx.lineTo(cx + rr * Math.cos(w), cy + rr * Math.sin(w)); ctx.stroke();
+      ctx.fillStyle = COL.marker; ctx.beginPath(); ctx.arc(cx + rr * Math.cos(w), cy + rr * Math.sin(w), 3 * s, 0, Math.PI * 2); ctx.fill();
+      ctx.lineWidth = Math.max(1, s); ctx.fillStyle = '#dfe6e8'; ctx.textAlign = 'center'; ctx.fillText(`${Math.round(st.tee.omni)}°`, cx, cy + rr + 5 * s); ctx.textAlign = 'left';
+    }
+    // labels
+    if (st.labels) {
+      const N = V3.norm(V3.cross(p.B, p.L));
+      ctx.font = `600 ${Math.round(12 * s)}px "IBM Plex Sans", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      for (const [name, X, rad] of LABELS) {
+        const v = V3.sub(X, p.O); const dn = V3.dot(v, N); if (Math.abs(dn) > rad * 0.8) continue;
+        const al = V3.dot(v, p.B), la = V3.dot(v, p.L), r = Math.hypot(al, la), a = Math.atan2(la, al);
+        if (al < 0.8 || r > p.D - 0.4 || Math.abs(a) > 0.72) continue;
+        const x = ox + la * ppc, y = top + al * ppc;
+        ctx.lineWidth = 3 * s; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(name, x, y); ctx.fillStyle = '#ffffff'; ctx.fillText(name, x, y);
+      }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    }
+    // ECG strip
+    const ey = H * 0.915, eh = H * 0.06;
+    ctx.strokeStyle = COL.ecg; ctx.lineWidth = 1.6 * s; ctx.beginPath();
+    let pen = false;
+    for (let x = 0; x < W; x += 2) { const v = ecgBuf[x]; if (isNaN(v) || Math.abs(x - ecgX) < 10 * s) { pen = false; continue; } const y = ey - v * eh; if (!pen) { ctx.moveTo(x, y); pen = true; } else ctx.lineTo(x, y); }
+    ctx.stroke();
+    ctx.fillStyle = COL.ecg; ctx.font = `${Math.round(12 * s)}px "IBM Plex Mono", monospace`; ctx.fillText(`HR ${st.hr}`, 12 * s, H * 0.86);
+  }
+
+  function tick(now) {
+    const dt = Math.min(0.1, (now - lastT) / 1000); lastT = now;
+    if (st.playing) {
+      const prev = st.phase;
+      st.phase = (st.phase + dt * st.hr / 60) % 1; st.time += dt;
+      // sweep the ECG: 3 s across the screen
+      if (ecgBuf) {
+        const W = ecgBuf.length, nx = (ecgX + dt / 3 * W);
+        for (let x = Math.floor(ecgX); x < Math.floor(nx); x++) { const f = (x - ecgX) / Math.max(1e-6, nx - ecgX); ecgBuf[x % W] = ecg((prev + (st.phase - prev + (st.phase < prev ? 1 : 0)) * f) % 1); }
+        ecgX = nx % W;
+      }
+      dirty = true;
+    }
+    if (dirty && echoCv.width > 0) {
+      const t0 = performance.now();
+      const p = curPose(), c = cyc(st.phase);
+      renderEcho(p, c); render3D(p, c);
+      const near = nearest(p);
+      drawOverlay(p, near);
+      const nEl = $('near'); nEl.textContent = near.s < 1.6 ? `Nearest: ${near.k}` : 'Off-axis'; nEl.className = 'near' + (near.s < 1.6 ? '' : ' off');
+      frame++; dirty = false;
+      fpsAcc = fpsAcc * 0.9 + dt * 0.1; fps = fpsAcc > 0 ? 1 / fpsAcc : 0;
+      // adaptive 3D resolution
+      if (st.playing && frame > 30) { if (fps < 24) slow++; else slow = Math.max(0, slow - 1); if (slow > 40 && scale3 > 0.3) { scale3 -= 0.1; slow = 0; resize(); } }
+    }
+    requestAnimationFrame(tick);
+  }
+  // initial
+  setMode('tte');
+  setView('A4C');
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) { st.playing = false; $('play').textContent = 'Play'; $('play').setAttribute('aria-pressed', 'false'); }
+  resize();
+  requestAnimationFrame(tick);
+  window.__sim = { st, setMode, setView, TTE, TEE };
+})();
+
+</script>
