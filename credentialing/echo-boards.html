@@ -521,7 +521,7 @@ async function load(){
   $("#srcchip").innerHTML=`<span class="chip">${source}</span><span class="chip">Next CCEeXAM ${fmt(pd(CONFIG.nextExam))}</span><span class="chip">Target ${R.tte} qualifying TTEs</span>`;
   renderTop(); renderList();
 }
-function post(){ const h=Math.ceil(document.documentElement.scrollHeight);
+function post(){ const h=Math.ceil(document.getElementById("app").getBoundingClientRect().height)+8;
   try{ parent.postMessage({labHeight:h, lab:"echoboards", credentialingHeight:h}, "*"); }catch(e){} }
 if (window.ResizeObserver) new ResizeObserver(post).observe(document.body);
 window.addEventListener("load",post);
