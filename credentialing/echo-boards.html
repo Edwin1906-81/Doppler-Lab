@@ -188,9 +188,9 @@ const CONFIG = {
   uploadNameField: "entry.1998879290",
   uploadDataField: "entry.698563734",
   theme: "light",
-  logUrl: "https://www.pulmonarypocus.com/s/Critical_Care_Echo_Case_Log.xlsx",
+  logUrl: "https://www.pulmonarypocus.com/s/Critical_Care_Echo_Case_Log_TEE.xlsx",
   contact: "pulmonarypocus@gmail.com",
-  req: { tte: 150 }
+  req: { tte: 150, tee: 50 }
 };
 /* ======================================================================= */
 
@@ -227,6 +227,8 @@ function normalize(r){
     exam: /pass|testamur/.test(ex) ? "Passed" : /regist|sched/.test(ex) ? "Registered" : "",
     examDate: String(r.exam_date||"").trim(),
     logSigned: truthy(r.log_signed), letter: truthy(r.letter), boards: truthy(r.boards),
+    teeLogged: +r.tee_logged||0, teeQual: +r.tee_qualifying||0, teeReviewed: +r.tee_reviewed||0,
+    teeLogSigned: truthy(r.tee_log_signed), teeLetter: truthy(r.tee_letter),
     note: String(r.note||"").trim(), uploaded: String(r.uploaded||"").trim(), pending: truthy(r.pending)
   };
 }
@@ -255,7 +257,14 @@ function compute(r){
   else if (q===0) pace={cls:"p-new",txt:"Not started"};
   else { projected = new Date(today.getTime()+remaining/(q/elapsed)*DAY);
     pace = projected<=target ? {cls:"p-ok",txt:"On track"} : projected<=new Date(target.getTime()+60*DAY) ? {cls:"p-warn",txt:"Pick up pace"} : {cls:"p-bad",txt:"Behind"}; }
-  return {...r, f, steps, doneCount, ready, overall, perWeek, neededPerWeek, remaining, projected, pace, start, target, today,
+  const teeF = Math.min(r.teeQual/R.tee,1);
+  const teeSteps = [
+    {t:`${R.tee} qualifying TEEs`, done:r.teeQual>=R.tee, part:r.teeQual>0, s:`${r.teeQual} of ${R.tee} performed and interpreted`},
+    {t:"TEE log signed by fellowship director", done:r.teeLogSigned, part:false, s:r.teeLogSigned?"Signed":"Separate from the TTE log"},
+    {t:"Notarized letter with exact TEE number", done:r.teeLetter, part:false, s:r.teeLetter?"Received":"From your fellowship director"}
+  ];
+  const teeReady = teeSteps.every(x=>x.done);
+  return {...r, teeF, teeSteps, teeReady, f, steps, doneCount, ready, overall, perWeek, neededPerWeek, remaining, projected, pace, start, target, today,
     revFrac: q ? Math.min(r.reviewed/q,1) : 0, concRate: r.reviewed ? r.concordant/r.reviewed : null};
 }
 
@@ -338,7 +347,7 @@ function segment(sel,cb){ $(sel).addEventListener("click",e=>{ const b=e.target.
 function howItWorks(){
   const steps=[
     ["Download your log",`Get the <a href="${CONFIG.logUrl}" target="_blank" rel="noopener">critical care echo case log</a> once and keep it on your own computer for all of fellowship.`],
-    ["Log every TTE","Columns follow the NBE case log. Only complete exams you personally perform and interpret qualify. Your supervisor fills in the review columns."],
+    ["Log every TTE (and TEE)","Columns follow the NBE case log. Only complete exams you personally perform and interpret qualify. Log TEEs in the TEE Log tab for the add-on. Your supervisor fills in the review columns."],
     ["Upload it here","Open <b style=\"display:inline\">Fellows: upload your echo log</b> below, choose your file, check the counts, and submit. Only your name, year and counts are sent."],
     ["Watch your card","Your card updates within about 5 minutes and shows Pending review until faculty verify it. Upload again whenever you add studies."],
     ["Apply to NBE","Pass the CCEeXAM, get your log signed and a notarized letter from your fellowship director, then apply once board certified."]
@@ -355,7 +364,8 @@ function reqCards(){
     ["3","Board certification","<p>Certification by an ABMS, AOA, AAPS or Royal College board, or an international equivalent.</p>"],
     ["4","Critical care training","<p>At least one year of ACGME accredited fellowship training dedicated to adult critical care. Cardiology rotations during residency do not count.</p>"],
     ["5","150 critical care TTEs",`<ul><li>Complete, medically necessary transthoracic exams, personally performed and interpreted under a qualified supervisor.</li><li>Limited or goal-directed exams do not count; neither do education or research only scans.</li><li>One repeat exam per patient, only for a change in status or to assess an intervention.</li><li>Supervisor holds NBE echo certification, or Testamur status within 10 years with critical care echo expertise, and reviews a subset of cases.</li></ul>`],
-    ["6","Documents","<p>A chronological case log in NBE format with date, indication, findings, diagnosis, attending, review date and supervising faculty, signed by you and your fellowship director, plus an original notarized letter from the director stating your exact numbers.</p>"]
+    ["6","Documents","<p>A chronological case log in NBE format with date, indication, findings, diagnosis, attending, review date and supervising faculty, signed by you and your fellowship director, plus an original notarized letter from the director stating your exact numbers.</p>"],
+    ["+","TEE add-on (optional)",`<ul><li>An add-on to NBE certification in Critical Care Echocardiography, not a stand-alone certificate. You must hold CCE certification first.</li><li>At least ${R.tee} medically necessary TEEs you personally performed and interpreted under supervision during ACGME fellowship.</li><li>TEEs from residency, or done only for education or research, do not count.</li><li>Its own case log (number, date, indications, attending, echo findings) signed by you and your fellowship director, plus a notarized letter stating the exact number of TEEs.</li></ul>`]
   ];
   return items.map(([n,t,b])=>`<details><summary><span class="ico">${n}</span>${t}</summary>${b}</details>`).join("");
 }
@@ -381,7 +391,7 @@ function renderList(){
     box.innerHTML=`<div class="grid">${list.map(st=>`
       <button class="card ${st.ready?"cred":""}" data-i="${st.i}" aria-expanded="false">
         ${ring(st,104)}
-        <div><div class="name">${esc(st.name)}</div><div class="meta">${st.year?`F${st.year} &middot; `:""}${st.reviewed} reviewed &middot; ${st.doneCount}/5 milestones</div></div>
+        <div><div class="name">${esc(st.name)}</div><div class="meta">${st.year?`F${st.year} &middot; `:""}${st.reviewed} reviewed &middot; ${st.doneCount}/5 milestones</div>${st.teeLogged?`<div class="meta">TEE add-on ${st.teeQual}/${R.tee}</div>`:""}</div>
         <div class="dots">${st.steps.map(s=>`<span class="dot ${s.done?"done":s.part?"part":""}" title="${esc(s.t)}"></span>`).join("")}</div>
         <span class="pill ${st.pace.cls}">${st.pace.txt}</span>
         ${st.pending?`<span class="pill p-new" title="Self-reported upload, not yet verified">Pending review</span>`:""}
@@ -390,11 +400,12 @@ function renderList(){
     if (openIdx!==null){ const c=box.querySelector(`.card[data-i="${openIdx}"]`); openIdx=null; if(c) toggleCard(+c.dataset.i,c,true); }
   } else {
     const yes=v=>v?"&#10003;":"&middot;";
-    box.innerHTML=`<div class="tblwrap"><table><thead><tr><th>Fellow</th><th>Qualifying<br><span style="font-weight:400">/${R.tte}</span></th><th>Logged</th><th>Reviewed</th><th>Concordant</th><th>CCEeXAM</th><th>Log signed</th><th>Letter</th><th>Boards</th><th>Overall</th></tr></thead><tbody>
+    box.innerHTML=`<div class="tblwrap"><table><thead><tr><th>Fellow</th><th>Qualifying<br><span style="font-weight:400">/${R.tte}</span></th><th>Logged</th><th>Reviewed</th><th>Concordant</th><th>CCEeXAM</th><th>Log signed</th><th>Letter</th><th>Boards</th><th>TEE<br><span style="font-weight:400">/${R.tee}</span></th><th>Overall</th></tr></thead><tbody>
       ${list.map(st=>`<tr class="r" data-i="${st.i}"><td><b>${esc(st.name)}</b>${st.year?` <span class="meta">F${st.year}</span>`:""}${st.pending?` <span class="meta">(pending)</span>`:""}</td>
         <td style="background:color-mix(in srgb, var(--cardiac) ${Math.round(st.f*55)}%, transparent)" class="${st.f>=1?"h":""}">${st.qualifying}</td>
         <td>${st.logged}</td><td>${st.reviewed}</td><td>${st.concRate===null?"&middot;":pct(st.concRate)+"%"}</td>
         <td>${st.exam||"&middot;"}</td><td>${yes(st.logSigned)}</td><td>${yes(st.letter)}</td><td>${yes(st.boards)}</td>
+        <td style="background:color-mix(in srgb, var(--vascular) ${Math.round(st.teeF*55)}%, transparent)">${st.teeLogged?st.teeQual:"&middot;"}</td>
         <td><span class="pill ${st.ready?"p-gold":"p-new"}">${st.ready?"&#9733; Ready":pct(st.overall)+"%"}</span></td></tr>`).join("")}
       </tbody></table></div>`;
     box.querySelectorAll("tr.r").forEach(tr=>tr.addEventListener("click",()=>toggleRow(+tr.dataset.i,tr)));
@@ -425,6 +436,11 @@ function detail(st){
         <h4 style="margin-top:12px">Next best steps</h4>
         <ul class="next">${nextSteps(st).map(n=>`<li>${n}</li>`).join("")}</ul>
         ${st.note?`<div class="note">&#128221; ${esc(st.note)}</div>`:""}
+        <h4 style="margin-top:14px">TEE add-on (optional)${st.teeReady?' <span class="pill p-gold">Ready</span>':""}</h4>
+        ${st.teeLogged ? `${bar("Qualifying TEEs",st.teeQual,R.tee,"var(--vascular)",st.teeQual>=R.tee?"Requirement met":`${R.tee-st.teeQual} to go &middot; ${st.teeReviewed} reviewed`)}
+          ${st.teeSteps.slice(1).map(s=>`<div class="step ${s.done?"done":""}"><span class="ico">${s.done?"&#10003;":"&middot;"}</span><div><div class="t">${s.t}</div><div class="s">${s.s}</div></div></div>`).join("")}
+          <div class="meta">Added to your CCE certification once you are NBE certified in Critical Care Echocardiography.</div>`
+          : `<div class="meta">No TEEs logged yet. If you perform TEEs, log them in the TEE Log tab: NBE offers a TEE add-on after ${R.tee} qualifying TEEs.</div>`}
       </div>
     </div>`;
   return el;
@@ -479,6 +495,19 @@ function parseLog(wb){
     if (col.rev && isDate(cell(ws,col.rev+r))) out.reviewed++;
     if (col.agr && String(cell(ws,col.agr+r)||"").trim().toLowerCase()==="agree") out.concordant++;
   }
+  out.teeLogged=0; out.teeQual=0; out.teeReviewed=0;
+  const te=wb.Sheets["TEE Log"];
+  if (te){
+    const tc={};
+    for (let c=0;c<40;c++){ const a=XLSX.utils.encode_col(c), h=String(cell(te,a+"6")||"").toLowerCase().replace(/\s+/g," ").trim();
+      if (h.startsWith("date performed")) tc.d=a; else if (h.startsWith("fellow role")) tc.role=a; else if (h.startsWith("date reviewed")) tc.rev=a; }
+    if (tc.d) for (let r=8;r<=1000;r++){
+      if (!isDate(cell(te,tc.d+r))) continue;
+      out.teeLogged++;
+      if (tc.role && String(cell(te,tc.role+r)||"").trim().toLowerCase()==="performed & interpreted") out.teeQual++;
+      if (tc.rev && isDate(cell(te,tc.rev+r))) out.teeReviewed++;
+    }
+  }
   return out;
 }
 function showPreview(){
@@ -488,6 +517,7 @@ function showPreview(){
     <label style="display:block;margin-top:6px">Year <select id="upyr"><option value="">Select</option>${["F1","F2","F3"].map(n=>`<option ${p.year===n?"selected":""}>${n}</option>`).join("")}</select></label>
     <table><tr><th>Logged</th><th>Qualifying</th><th>Reviewed</th><th>Concordant</th></tr>
       <tr><td>${p.logged}</td><td>${p.qualifying}</td><td>${p.reviewed}</td><td>${p.concordant}</td></tr></table>
+    <div class="meta" style="margin-top:4px">TEE add-on: ${p.teeLogged} logged, ${p.teeQual} qualifying, ${p.teeReviewed} reviewed</div>
     <button class="btn" id="upsend" style="margin-top:8px">Submit to dashboard</button>`;
   $("#upsend").addEventListener("click",sendUpload); post();
 }
@@ -495,7 +525,7 @@ async function sendUpload(){
   const name=$("#upname").value.trim().replace(/\s+/g," "), yr=$("#upyr").value;
   if (name.split(" ").length<2){ upMsg("err","Enter your first and last name the same way each time, so updates land on your card."); return; }
   if (!yr){ upMsg("err","Select your fellowship year."); return; }
-  const p=parsed, payload=[yr,p.logged,p.qualifying,p.reviewed,p.concordant].join(",");
+  const p=parsed, payload=[yr,p.logged,p.qualifying,p.reviewed,p.concordant,p.teeLogged,p.teeQual,p.teeReviewed].join(",");
   const b=$("#upsend"); b.disabled=true; b.textContent="Sending...";
   try{
     await fetch(CONFIG.uploadFormUrl,{method:"POST",mode:"no-cors",body:new URLSearchParams({[CONFIG.uploadNameField]:name,[CONFIG.uploadDataField]:payload})});
@@ -518,7 +548,7 @@ async function load(){
   try{ const res=await fetch(CONFIG.sheetCsvUrl+(CONFIG.sheetCsvUrl.includes("?")?"&":"?")+"t="+Date.now()); if(!res.ok) throw 0;
     data=parseCSV(await res.text()).map(normalize).filter(r=>r.name); source="Live from Google Sheet"; }
   catch(e){ data=[]; source="Sheet unavailable"; }
-  $("#srcchip").innerHTML=`<span class="chip">${source}</span><span class="chip">Next CCEeXAM ${fmt(pd(CONFIG.nextExam))}</span><span class="chip">Target ${R.tte} qualifying TTEs</span>`;
+  $("#srcchip").innerHTML=`<span class="chip">${source}</span><span class="chip">Next CCEeXAM ${fmt(pd(CONFIG.nextExam))}</span><span class="chip">Target ${R.tte} qualifying TTEs</span><span class="chip">TEE add-on ${R.tee}</span>`;
   renderTop(); renderList();
 }
 function post(){ const h=Math.ceil(document.getElementById("app").getBoundingClientRect().height)+8;
