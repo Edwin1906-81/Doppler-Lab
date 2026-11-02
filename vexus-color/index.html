@@ -119,6 +119,17 @@ li::marker{color:var(--accent)}
 .gtable th,.gtable td{border-top:1px solid var(--line);padding:6px 8px;text-align:left;color:var(--soft)}
 .gtable th{color:#fff;font-weight:600}
 .tblwrap{overflow-x:auto}
+.console{background:var(--panel);border:1px solid var(--line2);border-radius:14px;padding:12px 14px;display:grid;gap:12px}
+.crow1{display:flex;flex-wrap:wrap;align-items:center;gap:10px 14px}
+.cgrp{display:flex;align-items:center;gap:8px}
+.clab{font-size:.74rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);font-weight:700;display:flex;align-items:center;gap:5px}
+.console .modes{display:flex;gap:8px}.console .mode{min-width:92px}
+.crow2{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:10px 18px;align-items:end}
+.cgrp .seg button{padding:6px 9px}
+.knob{min-width:0}.knob .lbl{margin-bottom:5px;white-space:nowrap;font-size:.8rem}.knob .lbl b{font-size:.8rem}
+.knob .seg button{padding:7px 9px}
+.optst{display:flex;flex-wrap:wrap;align-items:center;gap:6px 8px;font-size:.8rem;min-height:30px}
+.optst .ok{color:var(--good);font-weight:700}.optst .no{color:var(--warn);font-weight:700}
 .foot{margin-top:14px;text-align:center;font-size:.76rem;color:var(--muted)}
 </style>
 </head>
@@ -151,6 +162,21 @@ li::marker{color:var(--accent)}
 
   <div class="stage">
     <div class="main">
+      <div class="console" id="knobs" aria-label="Machine controls">
+        <div class="crow1">
+          <div class="cgrp"><span class="clab">Preset <button class="qm" data-tip="preset" aria-label="About presets">?</button></span>
+            <div class="seg" id="presetSeg"><button data-v="card">Cardiac</button><button data-v="abd" class="on">Abdominal</button></div></div>
+          <div class="cgrp modes"><button class="mode" id="colorBtn" aria-pressed="false"><span class="led"></span>Color</button><button class="mode" id="pwBtn" aria-pressed="false"><span class="led"></span>PW</button></div>
+          <div class="cgrp"><span class="clab">Sweep</span><div class="seg" id="swSeg"><button data-v="25">25</button><button data-v="50" class="on">50</button><button data-v="66.7">66.7</button></div></div>
+        </div>
+        <div class="optst" id="optSt"></div>
+        <div class="crow2">
+          <div class="knob"><div class="lbl">Color scale <button class="qm" data-tip="scale" aria-label="About the color scale">?</button><b><span id="csV">38</span> cm/s</b></div><input id="cs" type="range" min="5" max="100" step="1" value="38" aria-label="Color scale"></div>
+          <div class="knob"><div class="lbl">Color gain <button class="qm" data-tip="gain" aria-label="About color gain">?</button><b id="cgV">50</b></div><input id="cg" type="range" min="0" max="100" step="1" value="50" aria-label="Color gain"></div>
+          <div class="knob"><div class="lbl">PW scale <b><span id="psV">40</span> cm/s</b></div><input id="ps" type="range" min="5" max="100" step="1" value="40" aria-label="PW scale"></div>
+          <div class="knob"><div class="lbl">Baseline <button class="qm" data-tip="baseline" aria-label="About the baseline">?</button><b id="blV">0</b></div><input id="bl" type="range" min="-80" max="80" step="5" value="0" aria-label="Baseline"></div>
+        </div>
+      </div>
       <div class="panel" id="p2d"><canvas id="c2d" aria-label="2D image with color Doppler box and pulsed wave gate. Drag to move them."></canvas></div>
       <div class="gstat" id="gstat"></div>
       <div class="panel" id="psp"><canvas id="csp" aria-label="Spectral Doppler display. Click to place calipers."></canvas>
@@ -166,17 +192,6 @@ li::marker{color:var(--accent)}
 
     <aside class="side">
       <div class="card" id="steps"></div>
-      <div class="card" id="knobs">
-        <h2>Machine</h2>
-        <div class="row"><div class="lbl">Preset <button class="qm" data-tip="preset" aria-label="About presets">?</button></div>
-          <div class="seg" id="presetSeg"><button data-v="card" class="on">Cardiac</button><button data-v="abd">Abdominal</button></div></div>
-        <div class="row modes"><button class="mode" id="colorBtn" aria-pressed="false"><span class="led"></span>Color</button><button class="mode" id="pwBtn" aria-pressed="false"><span class="led"></span>PW</button></div>
-        <div class="row"><div class="lbl">Color scale <button class="qm" data-tip="scale" aria-label="About the color scale">?</button><b><span id="csV">100</span> cm/s</b></div><input id="cs" type="range" min="5" max="100" step="1" value="100" aria-label="Color scale"></div>
-        <div class="row"><div class="lbl">Color gain <button class="qm" data-tip="gain" aria-label="About color gain">?</button><b id="cgV">50</b></div><input id="cg" type="range" min="0" max="100" step="1" value="50" aria-label="Color gain"></div>
-        <div class="row"><div class="lbl">PW scale <b><span id="psV">100</span> cm/s</b></div><input id="ps" type="range" min="5" max="100" step="1" value="100" aria-label="PW scale"></div>
-        <div class="row"><div class="lbl">Baseline <button class="qm" data-tip="baseline" aria-label="About the baseline">?</button><b id="blV">0</b></div><input id="bl" type="range" min="-80" max="80" step="5" value="0" aria-label="Baseline"></div>
-        <div class="row"><div class="lbl">Sweep speed</div><div class="seg" id="swSeg"><button data-v="25">25</button><button data-v="50" class="on">50</button><button data-v="66.7">66.7 mm/s</button></div></div>
-      </div>
       <div class="card" id="grade"></div>
     </aside>
   </div>
@@ -317,7 +332,7 @@ function ecg(t){const b=beatAt(t),tq=t-b.s,rr=b.rr;const q=x=>1.0*G(x,0,9)-0.18*
   let v=q(tq)+q(tq-rr)+0.3*G(tq,290,45);if(PAT.rh==='af')v+=0.04*Math.sin(t/21)+0.03*Math.sin(t/34+1);else v+=0.12*G(tq,rr-160,24);return v;}
 
 /* ================= state ================= */
-const S={view:'hv',preset:'card',color:false,pw:false,cs:100,cg:50,ps:100,bl:0,sweep:50,frozen:false,labels:true,mystery:false};
+const S={view:'hv',preset:'abd',color:false,pw:false,cs:38,cg:50,ps:40,bl:0,sweep:50,frozen:false,labels:true,mystery:false};
 let VIEW=VIEWS.hv,box={...VIEW.box},gate={...VIEW.gate,hits:[],status:'none',main:null,dJ:99};
 let tSim=0,cal=[];
 
@@ -498,11 +513,19 @@ function setGatePt(x,y){const [a,d]=polar(x,y);gate.a=a;gate.d=d;computeGate();}
 /* ================= controls ================= */
 function fill(el){el.style.setProperty('--pct',((el.value-el.min)/(el.max-el.min)*100)+'%');}
 function setSeg(id,v){document.querySelectorAll('#'+id+' button').forEach(b=>b.classList.toggle('on',b.dataset.v==String(v)));}
-function setCs(v){S.cs=v;$('cs').value=v;$('csV').textContent=v;fill($('cs'));}
-function setCg(v){S.cg=v;$('cg').value=v;$('cgV').textContent=v;fill($('cg'));}
-function setPs(v){S.ps=v;$('ps').value=v;$('psV').textContent=v;fill($('ps'));}
-function setBl(v){S.bl=v;$('bl').value=v;$('blV').textContent=(v>0?'+':'')+v;fill($('bl'));}
-function setPreset(p){S.preset=p;setSeg('presetSeg',p);if(p==='card'){setCs(100);setPs(100);}else{setCs(38);setPs(40);}setCg(50);}
+function setCs(v){S.cs=v;$('cs').value=v;$('csV').textContent=v;fill($('cs'));updOpt();}
+function setCg(v){S.cg=v;$('cg').value=v;$('cgV').textContent=v;fill($('cg'));updOpt();}
+function setPs(v){S.ps=v;$('ps').value=v;$('psV').textContent=v;fill($('ps'));updOpt();}
+function setBl(v){S.bl=v;$('bl').value=v;$('blV').textContent=(v>0?'+':'')+v;fill($('bl'));updOpt();}
+const OPT={hv:{cs:38,cg:50,ps:40,bl:0,why:'Abdominal preset · color 38 cm/s · PW 40 cm/s'},pv:{cs:38,cg:50,ps:22,bl:-40,why:'Color 38 cm/s · PW 22 cm/s · baseline lowered for flow toward the probe'},irv:{cs:16,cg:66,ps:22,bl:0,why:'Color 16 cm/s · gain 66 · PW 22 cm/s for slow intrarenal flow'}};
+function applyOpt(){const o=OPT[S.view];S.preset='abd';setSeg('presetSeg','abd');setCs(o.cs);setCg(o.cg);setPs(o.ps);setBl(o.bl);}
+function setPreset(p){if(p==='abd'){applyOpt();return;}S.preset=p;setSeg('presetSeg',p);setCs(100);setPs(100);setCg(50);setBl(0);}
+function updOpt(){const el=$('optSt');if(!el)return;const o=OPT[S.view],issues=[];
+  if(S.cs>o.cs*1.6)issues.push('color scale too high: slow flow drops out');else if(S.cs<o.cs*0.55)issues.push('color scale too low: flow aliases');
+  if(S.cg>80)issues.push('color gain too high: speckle');else if(S.cg<o.cg-20)issues.push('color gain too low: vessels fill poorly');
+  if(S.ps>o.ps*2)issues.push('PW scale too high: small waveform');else if(S.ps<o.ps*0.5)issues.push('PW scale too low: waveform wraps');
+  el.innerHTML=issues.length?`<span class="no">Adjusted:</span> <span>${issues.join('; ')}.</span> <button class="btn" id="optBtn">Restore optimal</button>`:`<span class="ok">✓ Optimal for the ${VIEWS[S.view].name.toLowerCase()}</span> <span class="note">${o.why}</span>`;
+  if($('optBtn'))$('optBtn').onclick=applyOpt;}
 function setColor(v){S.color=v;$('colorBtn').setAttribute('aria-pressed',v);updGstat();}
 function setPW(v){S.pw=v;$('pwBtn').setAttribute('aria-pressed',v);if(v)computeGate();cal=[];updGstat();updMeas();}
 function setFreeze(v){S.frozen=v;$('freeze').innerHTML=v?'▶ Live':'❚❚ Freeze';if(!v){cal=[];updMeas();}}
@@ -513,12 +536,12 @@ document.querySelectorAll('#swSeg button').forEach(b=>b.onclick=()=>{S.sweep=+b.
 $('colorBtn').onclick=()=>setColor(!S.color);$('pwBtn').onclick=()=>setPW(!S.pw);
 $('freeze').onclick=()=>setFreeze(!S.frozen);$('labBtn').onclick=()=>{if(!S.mystery)setLabels(!S.labels);};$('clrBtn').onclick=()=>{cal=[];updMeas();};
 document.addEventListener('keydown',e=>{if(e.code==='Space'&&!e.target.closest('input,select,textarea,button')){e.preventDefault();setFreeze(!S.frozen);}if(e.key==='Escape')closePop();});
-function setView(v){if(VIEW)VIEW.saved={box:{...box},a:gate.a,d:gate.d};S.view=v;VIEW=VIEWS[v];setSeg('vtabs',v);const sv=VIEW.saved;box=sv?{...sv.box}:{...VIEW.box};gate.a=sv?sv.a:VIEW.gate.a;gate.d=sv?sv.d:VIEW.gate.d;renderBG();computeCells();computeGate();fresh();renderSteps();}
+function setView(v){if(VIEW)VIEW.saved={box:{...box},a:gate.a,d:gate.d};S.view=v;VIEW=VIEWS[v];setSeg('vtabs',v);applyOpt();const sv=VIEW.saved;box=sv?{...sv.box}:{...VIEW.box};gate.a=sv?sv.a:VIEW.gate.a;gate.d=sv?sv.d:VIEW.gate.d;renderBG();computeCells();computeGate();fresh();renderSteps();}
 document.querySelectorAll('#vtabs button').forEach(b=>b.onclick=()=>setView(b.dataset.v));
 
 /* ================= help bubbles ================= */
 const TIPS={
- preset:['Presets','The cardiac preset usually starts with a Doppler scale near 100 cm/s, which hides slow venous flow. An abdominal or FAST preset starts lower. Aim for about <b>40 cm/s</b> for the hepatic and portal veins and <b>under 20 cm/s</b> for intrarenal veins.'],
+ preset:['Presets','The cardiac preset usually starts with a Doppler scale near 100 cm/s, which hides slow venous flow. An abdominal or FAST preset starts lower. Aim for about <b>40 cm/s</b> for the hepatic and portal veins and <b>under 20 cm/s</b> for intrarenal veins. In this lab, <b>Abdominal</b> loads the optimal settings for the vein you are on.'],
  scale:['Color scale (Nyquist limit)','The highest velocity color can display before it wraps to the opposite color (aliasing). Too high, and slow flow disappears, which can be mistaken for no flow or thrombosis. Too low, and normal flow aliases into a mosaic that mimics turbulence.'],
  gain:['Color gain','Raise it slowly until small vessels fill with color. Stop before color speckles appear in solid tissue.'],
  baseline:['Baseline','Moves the zero line. Moving it up gives more room for flow below the baseline (away from the probe), so large venous waves fit without wrapping.'],
@@ -539,27 +562,25 @@ document.addEventListener('click',e=>{const b=e.target.closest('.qm');if(b){e.pr
 const boxHas=p=>inBox(p[0],p[1]);
 const STEPS={
  hv:{tasks:[
-  {t:'Switch to the abdominal preset',x:()=>'The cardiac preset starts the color scale near 100 cm/s, which hides slow venous flow '+tip('preset')+'. Choose <b>Abdominal</b>, or bring the color scale down to about 40 cm/s.',ok:()=>S.cs<=50,show:()=>setPreset('abd'),focus:'#presetSeg'},
-  {t:'Find the hepatic vein with color',x:()=>'Press <b>Color</b> and drag the box over the long vein draining into the IVC. Blue means flow away from the probe, toward the heart '+tip('color')+'. Watch it flash red with the A wave.',ok:()=>S.color&&boxHas(VIEW.find),show:()=>{setColor(true);box={...VIEW.box};computeCells();},focus:'#colorBtn'},
+  {t:'Find the hepatic vein with color',x:()=>'Press <b>Color</b> and drag the box over the long vein draining into the IVC. Blue means flow away from the probe, toward the heart '+tip('color')+'. Watch it flash red with the A wave. Then try <b>Cardiac</b> (100 cm/s) and watch the flow drop out.',ok:()=>S.color&&boxHas(VIEW.find),show:()=>{setColor(true);box={...VIEW.box};computeCells();},focus:'#colorBtn'},
   {t:'Place the PW gate 1 to 2 cm from the IVC junction',x:()=>'Press <b>PW</b>, then drag the gate (the two short lines) into the hepatic vein about 1 to 2 cm before it joins the IVC. Avoid the junction itself.',ok:()=>S.pw&&gate.status==='hv-good',show:()=>{setPW(true);setGatePt(-0.47,8.62);},hint:'The junction is where the vein meets the top of the IVC. Pull the gate back up the vein until the status line turns green.',focus:'#pwBtn'}],
   q:()=>'Read the waveform with the ECG. Which pattern is it? '+tip('hvwaves'),opts:['S larger than D (normal)','S smaller than D (mildly abnormal)','S reversal (severely abnormal)','Blunted, little phasicity'],
   key:{normal:0,mild:1,severe:2,af:1,cirr:3},
   exp:{normal:'S is larger than D, both below the baseline (toward the heart). A and V are small waves above. Normal.',mild:'S is smaller than D but still below the baseline: mildly abnormal. Rising right atrial pressure blunts the systolic wave first.',severe:'S is reversed above the baseline and only D remains below it: severely abnormal.',af:'S is smaller than D, but there is no A wave and the RR intervals are irregular. Atrial fibrillation alone causes S &lt; D without a high RA pressure, so read it with the ECG and the IVC.',cirr:'The waveform is blunted with little cardiac phasicity. Cirrhosis or fatty liver damps the hepatic vein signal, so it cannot be graded reliably.'}},
  pv:{tasks:[
-  {t:'Color the portal vein',x:()=>'With <b>Color</b> on (scale about 40 cm/s), cover the portal vein. Red means flow toward the probe, into the liver. The small mosaic vessel beside it is the hepatic artery, aliasing because it is faster than the scale '+tip('scale')+'.',ok:()=>S.color&&S.cs<=50&&boxHas(VIEW.find),show:()=>{if(S.cs>50)setPreset('abd');setColor(true);box={...VIEW.box};computeCells();},focus:'#colorBtn'},
-  {t:'Gate the portal vein, away from the artery',x:()=>'Turn on <b>PW</b> and place the gate distally within the portal vein, clear of the mosaic artery. Then lower the <b>PW scale</b> so the waveform is tall.',ok:()=>S.pw&&gate.status==='pv-good',show:()=>{setPW(true);setGatePt(1.6,7.3);setPs(22);},hint:'The artery runs beside the deeper half of the portal vein. Move the gate toward the shallower end.',focus:'#pwBtn'},
+  {t:'Color the portal vein',x:()=>'Press <b>Color</b> and cover the portal vein. Red means flow toward the probe, into the liver. The small mosaic vessel beside it is the hepatic artery, aliasing because it is faster than the scale '+tip('scale')+'.',ok:()=>S.color&&boxHas(VIEW.find),show:()=>{setColor(true);box={...VIEW.box};computeCells();},focus:'#colorBtn'},
+  {t:'Gate the portal vein, away from the artery',x:()=>'Turn on <b>PW</b> and place the gate distally within the portal vein, clear of the mosaic artery.',ok:()=>S.pw&&gate.status==='pv-good',show:()=>{setPW(true);setGatePt(1.6,7.3);},hint:'The artery runs beside the deeper half of the portal vein. Move the gate toward the shallower end.',focus:'#pwBtn'},
   {t:'Measure Vmax and Vmin',x:()=>'Click the spectral display at the highest point of the waveform, then at the lowest '+tip('pvpf')+'. The readout calculates PVPF.',ok:()=>S.pw&&gate.status==='pv-good'&&cal.length===2&&calPVPF()!=null&&(cat3(calPVPF())===cat3(pvpfTrue())||Math.abs(calPVPF()-pvpfTrue())<12),show:()=>{autoCal();},hint:'Use the outer edge (envelope) of the waveform. Freeze first if it helps.',focus:'#csp'}],
   q:()=>'Using your PVPF, how pulsatile is the portal vein? '+tip('pvpf'),opts:['Under 30% (normal)','30 to 49% (mildly abnormal)','50% or more (severely abnormal)'],
   key:{normal:0,mild:1,severe:2,lean:1,cirr:0},
   exp:{normal:'PVPF under 30%: continuous, minimally pulsatile flow into the liver. Normal.',mild:'PVPF between 30 and 50%: mildly abnormal.',severe:'PVPF of 50% or more, here with brief flow reversal below the baseline: severely abnormal.',lean:'PVPF is 30 to 50%, but the IVC is small and the heart rate slow. Lean, athletic people can have a pulsatile portal vein without congestion: a pitfall.',cirr:'Low velocity, continuous flow with little pulsatility. In cirrhosis, portal hypertension can mask pulsatility even when the RA pressure is high.'}},
  irv:{tasks:[
-  {t:'Lower the color scale below 20 cm/s',x:()=>'Intrarenal flow is slow. Stay in the abdominal preset and bring the <b>color scale</b> under 20 cm/s '+tip('scale')+'.',ok:()=>S.cs<20,show:()=>setCs(16),focus:'#cs'},
-  {t:'Raise the color gain',x:()=>'With <b>Color</b> on and the box over the kidney, raise the <b>color gain</b> until the interlobar vessels fill, stopping before speckles appear in the tissue '+tip('gain')+'.',ok:()=>S.color&&S.cg>=55&&S.cg<=80,show:()=>{setColor(true);box={...VIEW.box};computeCells();setCg(66);},hint:'About 55 to 80 works here. Above 80, color noise fills the cortex.',focus:'#cg'},
-  {t:'Gate an interlobar artery and vein',x:()=>'Turn on <b>PW</b> and drag the gate onto a red and blue pair radiating from the center of the kidney. The artery appears above the baseline, the vein below.',ok:()=>S.pw&&(gate.status==='irv-good'||gate.status==='irv-vein'),show:()=>{setPW(true);const m=PAIRS[3].mid;setGatePt(m[0],m[1]);setPs(22);},hint:'Pick a pair that runs up and down, in line with the beam. Lower the PW scale to about 20 cm/s.',focus:'#pwBtn'}],
+  {t:'Find the interlobar vessels with color',x:()=>'Press <b>Color</b> and keep the box over the kidney. The settings are already low (16 cm/s) with extra gain '+tip('gain')+'. To see why, raise the color scale to 38 and the vessels vanish; push gain past 80 and speckle fills the cortex.',ok:()=>S.color&&boxHas(VIEW.find),show:()=>{setColor(true);box={...VIEW.box};computeCells();},focus:'#colorBtn'},
+  {t:'Gate an interlobar artery and vein',x:()=>'Turn on <b>PW</b> and drag the gate onto a red and blue pair radiating from the center of the kidney. The artery appears above the baseline, the vein below.',ok:()=>S.pw&&(gate.status==='irv-good'||gate.status==='irv-vein'),show:()=>{setPW(true);const m=PAIRS[3].mid;setGatePt(m[0],m[1]);},hint:'Pick a pair that runs up and down, in line with the beam.',focus:'#pwBtn'}],
   q:()=>'Which intrarenal venous pattern is it? '+tip('irvp'),opts:['Continuous (normal)','Biphasic, distinct S and D (mildly abnormal)','Monophasic, D only (severely abnormal)'],
   key:{normal:0,mild:1,severe:2},
   exp:{normal:'Continuous venous flow below the baseline with minimal pulsatility. Normal.',mild:'Interrupted, biphasic venous flow with distinct S and D waves: mildly abnormal.',severe:'Only a D wave below the baseline in each cycle (monophasic): severely abnormal.'}}};
-const DONE={hv:[0,0,0],pv:[0,0,0],irv:[0,0,0]},ANS={hv:-1,pv:-1,irv:-1,grade:-1},HINT={},SKIP={};
+const DONE={hv:[0,0],pv:[0,0,0],irv:[0,0]},ANS={hv:-1,pv:-1,irv:-1,grade:-1},HINT={},SKIP={};
 function clearPulse(){document.querySelectorAll('.pulse').forEach(e=>e.classList.remove('pulse'));}
 function renderSteps(){clearPulse();const v=S.view,D=STEPS[v],dn=DONE[v],cur=dn.indexOf(0);let h=`<h2>${VIEW.name} · steps</h2><ol class="tasks">`;
   D.tasks.forEach((t,i)=>{const st=dn[i]?'done':i===cur?'cur':'todo';h+=`<li class="task ${st}"><span class="tick">${dn[i]?'✓':i+1}</span><div><div class="tt">${t.t}</div>`;
@@ -609,7 +630,7 @@ function frame(ts){if(last==null)last=ts;const dt=Math.min(50,ts-last);last=ts;
   if(!S.frozen){colAcc+=dt*S.sweep*4/1000;const n=Math.min(60,Math.floor(colAcc));colAcc-=n;const t0=tSim;tSim+=dt;for(let i=1;i<=n;i++)writeCol(t0+dt*i/n);}
   if(frameN++%10===0)checkSteps(false);
   draw2d();drawSp();requestAnimationFrame(frame);}
-['cs','cg','ps','bl'].forEach(id=>fill($(id)));setBl(0);
+['cs','cg','ps','bl'].forEach(id=>fill($(id)));
 resize();setPatient('g2',false);setView('hv');requestAnimationFrame(frame);
 try{const post=()=>parent.postMessage({labHeight:document.documentElement.scrollHeight,lab:'vexus-color'},'*');new ResizeObserver(post).observe(document.body);post();}catch(e){}
 })();
