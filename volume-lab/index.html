@@ -1,0 +1,435 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>POCUS Volume Lab</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600&family=Atkinson+Hyperlegible:wght@400;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: scanner-console canvas on top, one control row, then a readout card and a step card side by side (stacked on phones). Single dark look on purpose. */
+:root{
+  --bg:#0b0f12; --panel:#121920; --panel2:#0f151b; --line:#24303a; --fg:#e6edf1; --muted:#8fa0ab;
+  --cal:#ffd166; --ok:#4fd1a5; --ok-bg:#0f2e25; --warn:#f2a93b; --warn-bg:#3a2a12; --bad:#ff7a7a; --bad-bg:#3a1616; --accent:#9fd8ff;
+  --f-display:"Barlow Condensed","Arial Narrow",sans-serif;
+  --f-body:"Atkinson Hyperlegible",system-ui,sans-serif;
+  --f-mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  color-scheme:dark;
+}
+html,body{background:var(--bg);color:var(--fg)}
+body{font-family:var(--f-body);font-size:15px;line-height:1.55;padding-block:18px 28px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:980px;margin:0 auto;display:flex;flex-direction:column;gap:14px}
+.head{display:flex;flex-wrap:wrap;align-items:baseline;justify-content:space-between;gap:6px 16px}
+h1{font-family:var(--f-display);font-weight:600;font-size:30px;letter-spacing:.02em;margin:0}
+h2{font-family:var(--f-display);font-weight:600;font-size:19px;letter-spacing:.03em;margin:0}
+.tag{font-family:var(--f-mono);font-size:12px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.tabs{display:flex;gap:6px;flex-wrap:wrap}
+.tabs button{font-family:var(--f-display);font-size:18px;font-weight:600;letter-spacing:.04em;padding:8px 18px}
+.tabs button[aria-selected="true"]{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.screen{background:#000;border:1px solid var(--line);border-radius:10px;overflow:hidden}
+canvas{display:block;width:100%;height:auto}
+.bar{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;border-right:1px solid var(--line)}
+.seg button:last-child{border-right:0}
+.seg button[aria-pressed="true"]{background:#1d2a35;color:var(--accent)}
+.spacer{flex:1}
+button{font-family:var(--f-body);font-size:14px;font-weight:700;color:var(--fg);background:var(--panel);border:1px solid var(--line);border-radius:8px;padding:8px 14px;cursor:pointer}
+button:hover{border-color:var(--muted)}
+button:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+button.sniff{border-color:var(--cal);color:var(--cal)}
+button[aria-pressed="true"].tog{border-color:var(--cal);color:var(--cal)}
+.cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+.card{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:flex;flex-direction:column;gap:10px;min-width:0}
+.nums{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.nums div{background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px;font-size:18px}
+.nums span{display:block;font-size:11px;color:var(--muted);letter-spacing:.08em;text-transform:uppercase}
+.formula{font-family:var(--f-mono);font-size:13px;color:var(--cal)}
+.steps{display:flex;flex-direction:column;gap:8px;margin:0;padding:0;list-style:none}
+.steps li{display:grid;grid-template-columns:auto 1fr auto;gap:10px;align-items:center;background:var(--panel2);border:1px solid var(--line);border-radius:8px;padding:8px 10px}
+.steps b{font-family:var(--f-display);font-size:16px;letter-spacing:.03em;color:var(--muted)}
+.pill{font-weight:700;font-size:12px;border-radius:999px;padding:3px 10px;white-space:nowrap;border:1px solid}
+.pill.ok{color:var(--ok);background:var(--ok-bg);border-color:var(--ok)}
+.pill.warn{color:var(--warn);background:var(--warn-bg);border-color:var(--warn)}
+.pill.bad{color:var(--bad);background:var(--bad-bg);border-color:var(--bad)}
+.pill.idle{color:var(--muted);background:var(--panel2);border-color:var(--line)}
+.verdict{font-family:var(--f-display);font-size:20px;font-weight:600;letter-spacing:.02em}
+.note{color:var(--muted);font-size:13.5px;margin:0;max-width:70ch}
+.card p{margin:0}
+a{color:var(--accent)}
+@media (max-width:720px){.cards{grid-template-columns:1fr}.nums{grid-template-columns:repeat(3,1fr)}}
+</style>
+
+<div class="wrap" id="lab">
+  <div class="head">
+    <h1>POCUS Volume Lab</h1>
+    <div class="tag">Lung · IVC · IJV</div>
+  </div>
+
+  <div class="tabs" role="tablist">
+    <button role="tab" id="tab-lung" aria-selected="true" data-tab="lung">Lung</button>
+    <button role="tab" id="tab-ivc" aria-selected="false" data-tab="ivc">IVC</button>
+    <button role="tab" id="tab-ijv" aria-selected="false" data-tab="ijv">IJV</button>
+  </div>
+
+  <div class="screen"><canvas id="scope" width="960" height="620" aria-label="Simulated ultrasound with B-mode image and M-mode sweep"></canvas></div>
+
+  <div class="bar">
+    <div class="seg" id="scen"></div>
+    <button class="sniff" id="sniff">Sniff</button>
+    <div class="spacer"></div>
+    <button class="tog" id="cal" aria-pressed="true">Calipers on</button>
+    <button id="freeze" aria-pressed="false">Freeze</button>
+  </div>
+
+  <div class="cards">
+    <div class="card" id="readCard"></div>
+    <div class="card" id="stepCard"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+const cv=document.getElementById('scope'),ctx=cv.getContext('2d');
+const W=960,H=620;
+const RESP=4.0,HRP=0.8;
+const rnd=Math.random;
+function insp(t){const p=(t%RESP)/RESP;return p<0.4?0.5-0.5*Math.cos(Math.PI*p/0.4):0.5+0.5*Math.cos(Math.PI*(p-0.4)/0.6);}
+function noiseCanvas(w,h,fn){const c=document.createElement('canvas');c.width=w;c.height=h;const x=c.getContext('2d');const im=x.createImageData(w,h),d=im.data;for(let j=0;j<h;j++)for(let i=0;i<w;i++){const v=fn(i,j);const k=(j*w+i)*4;if(v<0){d[k+3]=0;continue;}const g=Math.max(0,Math.min(255,v))|0;d[k]=d[k+1]=d[k+2]=g;d[k+3]=255;}x.putImageData(im,0,0);return c;}
+const MONO='500 12px "JetBrains Mono",ui-monospace,monospace';
+const LBL='600 15px "Barlow Condensed","Arial Narrow",sans-serif';
+
+/* ---------- scenarios ---------- */
+const SCEN={
+  lung:[{id:'a',label:'A-lines (aerated)'},{id:'b',label:'B-lines (interstitial)'}],
+  ivc:[{id:'n',label:'Normal IVC',dmax:1.7,dmin:0.72,sn:0.15},{id:'p',label:'Plethoric IVC',dmax:2.5,dmin:2.36,sn:2.32}],
+  ijv:[{id:'n',label:'Normal RAP',dmax:0.92,dmin:0.52,sn:0.08},{id:'e',label:'Elevated RAP',dmax:1.5,dmin:1.4,sn:1.37}]
+};
+let tab='lung',scen={lung:'a',ivc:'n',ijv:'n'};
+let frozen=false,showCal=true,simT=0,sweepX=0,lastNow=null,sniffAt=-99,sniff=null;
+const trace=document.createElement('canvas');trace.width=W;trace.height=H;const tx=trace.getContext('2d');
+const colD=new Float32Array(W).fill(NaN),colS=new Uint8Array(W);
+function sc(){return SCEN[tab].find(s=>s.id===scen[tab]);}
+function sniffAmt(t){const d=t-sniffAt;return d>=0&&d<=0.9?Math.sin(Math.PI*d/0.9):0;}
+function diam(t){const s=sc();let D=s.dmax-(s.dmax-s.dmin)*insp(t);if(tab==='ijv')D*=1+0.025*Math.sin(2*Math.PI*t/HRP);const a=sniffAmt(t);return D+(s.sn-D)*a;}
+
+/* ---------- geometry per tab ---------- */
+const G={
+  lung:{bx:200,by:20,bw:560,bh:400,k:400/7,mx0:200,mx1:760,my0:448,my1:606,mdepth:7,mk:158/7,pl:1.5},
+  ivc:{ax:480,ay:8,R:292,ang:0.85,k:292/15,mx0:60,mx1:880,my0:316,my1:606,mdepth:15,mk:290/15},
+  ijv:{bx:300,by:10,bw:360,bh:288,k:288/4,mx0:60,mx1:880,my0:316,my1:606,mdepth:4,mk:290/4}
+};
+
+/* ---------- static textures ---------- */
+const lg=G.lung;
+const rib1={c:60,w:84},rib2={c:500,w:84};
+const icsL=rib1.c+rib1.w/2,icsR=rib2.c-rib2.w/2;
+const lungStatic=noiseCanvas(lg.bw,lg.bh,(x,y)=>{
+  const d=y/lg.k;const inRib=x<icsL||x>=icsR;
+  if(inRib&&d>=1.12)return 3+rnd()*9;
+  if(d<0.12)return 150+rnd()*80;
+  if(d<0.5)return 35+rnd()**2*90;
+  if(d<lg.pl-0.08){return 55+18*Math.sin(y*0.9+x*0.015)+rnd()**2*90;}
+  return -1;
+});
+const lungNoise=noiseCanvas(lg.bw+200,lg.bh,(x,y)=>10+rnd()**3*80);
+const shimmer=Array.from({length:900},()=>150+rnd()*105);
+const lungProfile=Array.from({length:lg.my1-lg.my0},(_,j)=>{const d=j/lg.mk;if(d<0.12)return 190;if(d<0.5)return 40+rnd()*70;if(d<lg.pl-0.05)return 50+rnd()*90;return -1;});
+
+const iv=G.ivc;
+function inFan(x,y){const dx=x-iv.ax,dy=y-iv.ay,r=Math.hypot(dx,dy);return r>16&&r<iv.R&&Math.abs(Math.atan2(dx,dy))<iv.ang;}
+const ivcStatic=noiseCanvas(W,300,(x,y)=>{if(!inFan(x,y))return -1;const d=Math.hypot(x-iv.ax,y-iv.ay)/iv.k;if(d<0.4)return 160+rnd()*80;if(d<1.6)return 45+18*Math.sin(d*22)+rnd()**2*80;return 40+rnd()**2*140*(1-d/26);});
+const ivcProfile=Array.from({length:iv.my1-iv.my0+80},(_,j)=>{const d=j/iv.mk;if(d<0.4)return 180+rnd()*40;if(d<1.6)return 45+rnd()*80;if(d>11.4&&d<11.9)return 190;if(d>11.9)return 30+rnd()*40;return 45+rnd()*110*(1-d/26);});
+
+const ij=G.ijv;
+const ijvStatic=noiseCanvas(ij.bw,ij.bh,(x,y)=>{const d=y/ij.k;if(d<0.12)return 170+rnd()*70;if(d<0.35)return 35+rnd()**2*90;if(d<1.0)return 60+20*Math.sin(y*1.2+x*0.03)+rnd()**2*90;if(d<1.12)return 160+rnd()*50;return 35+rnd()**2*120*(1-d/7);});
+const ijvProfile=Array.from({length:ij.my1-ij.my0+20},(_,j)=>{const d=j/ij.mk;if(d<0.12)return 190+rnd()*40;if(d<0.35)return 40+rnd()*60;if(d<1.0)return 60+rnd()*90;if(d<1.12)return 170;return 40+rnd()*110*(1-d/7);});
+
+/* ---------- M-mode column renderers ---------- */
+function colLung(x,t){
+  const y0=lg.my0,h=lg.my1-lg.my0,pl=Math.round(lg.pl*lg.mk);
+  for(let j=0;j<h;j++){
+    let v;
+    if(j<pl-1){v=lungProfile[j]*(0.88+0.24*rnd());}
+    else if(j<=pl+1){v=200+rnd()*55;}
+    else{v=10+rnd()**2*125;const dj=j/lg.mk;if(scen.lung==='a'&&[3,4.5,6].some(a=>Math.abs(dj-a)<0.06))v+=60;if(scen.lung==='b'){const sl=insp(t)*14*0.9;if([95,170,255,330].some(q=>Math.abs(icsL+q+sl-lg.bw/2)<2.2))v=170+rnd()*70;}}
+    tx.fillStyle=`rgb(${v|0},${v|0},${v|0})`;tx.fillRect(x,y0+j,1,1);
+  }
+}
+function colVein(x,t,cfg,profile,center,shiftOf){
+  const D=diam(t);colD[x]=D;colS[x]=sniffAmt(t)>0.02?1:0;
+  const y0=cfg.my0,h=cfg.my1-cfg.my0,k=cfg.mk;
+  const sh=shiftOf(t),c=center+sh;
+  const top=(c-D/2)*k,bot=(c+D/2)*k;
+  for(let j=0;j<h;j+=1){
+    let v;
+    if(j>top+1&&j<bot-1)v=4+rnd()*12;
+    else if(Math.abs(j-top)<=1.6||Math.abs(j-bot)<=1.6)v=185+rnd()*60;
+    else{const dShift=(j/k)>1.5?sh*k:0;const idx=Math.max(0,Math.round(j-dShift));v=(profile[idx]||40)*(0.85+0.3*rnd());}
+    tx.fillStyle=`rgb(${v|0},${v|0},${v|0})`;tx.fillRect(x,y0+j,1,1);
+  }
+}
+function drawCol(x,t){
+  const g=G[tab];
+  tx.fillStyle='#000';tx.fillRect(x+1,g.my0,10,g.my1-g.my0);
+  if(tab==='lung')colLung(x,t);
+  else if(tab==='ivc')colVein(x,t,iv,ivcProfile,9,tt=>insp(tt)*0.9);
+  else colVein(x,t,ij,ijvProfile,1.62,tt=>insp(tt)*0.06);
+}
+const SPEED=120;
+function resetSweep(){
+  const g=G[tab];tx.fillStyle='#000';tx.fillRect(0,0,W,H);colD.fill(NaN);colS.fill(0);sniffAt=-99;sniff=null;
+  const end=g.mx1-24;for(let x=g.mx0;x<end;x++)drawCol(x,(x-g.mx0)/SPEED);
+  simT=(end-g.mx0)/SPEED;sweepX=end;
+}
+
+/* ---------- B-mode renderers ---------- */
+function label(t,x,y,align){ctx.font=LBL;ctx.textAlign=align||'left';ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.75)';ctx.strokeText(t,x,y);ctx.fillStyle='#ffe08a';ctx.fillText(t,x,y);}
+function leader(x1,y1,x2,y2){ctx.strokeStyle='rgba(255,224,138,.8)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();}
+function depthScale(x,y0,k,maxD,step){ctx.fillStyle='#8fa0ab';ctx.font=MONO;ctx.textAlign='left';ctx.strokeStyle='#5d6b75';for(let d=0;d<=maxD+0.001;d+=step){const y=y0+d*k;ctx.beginPath();ctx.moveTo(x,y);ctx.lineTo(x+6,y);ctx.stroke();ctx.fillText(String(d),x+10,y+4);}}
+
+const PA={ax:480,ay:14,R:592,ang:0.72,k:592/19};
+let paStatic=null;
+function smoothNoise(n){const a=Array.from({length:n},()=>rnd());const o=[];for(let i=0;i<n;i++){let s=0;for(let j=-2;j<=2;j++)s+=a[(i+j+n)%n];o.push(s/5);}const mn=Math.min(...o),mx=Math.max(...o);return o.map(v=>(v-mn)/(mx-mn));}
+const BLN=[{a:-0.40,w:0.11,p:0},{a:-0.12,w:0.15,p:1.6},{a:0.10,w:0.09,p:2.9},{a:0.33,w:0.12,p:4.2}].map(b=>({...b,n:smoothNoise(220)}));
+function drawLungPhased(){
+  if(!paStatic)paStatic=noiseCanvas(W,H,(x,y)=>{const dx=x-PA.ax,dy=y-PA.ay,r=Math.hypot(dx,dy);if(r<14||r>PA.R||Math.abs(Math.atan2(dx,dy))>PA.ang)return -1;const d=r/PA.k;if(d<0.35)return 160+rnd()*70;if(d<2.2)return 45+8*Math.sin(d*9)+rnd()**2*95;return 20+rnd()**2*85*(1-d/30);});
+  ctx.drawImage(paStatic,0,0);
+  const {ax,ay,R,k}=PA,ph=2*Math.PI*simT/RESP,rp=2.4*k;
+  if(scen.lung==='a'){
+    [2,3,4,5].forEach((m,i)=>{const r=rp*m+Math.sin(ph)*0.6;const amp=(0.85-i*0.17);for(let a=-0.42;a<0.42;a+=0.01){const edge=1-Math.min(1,Math.max(0,(Math.abs(a)-0.28)/0.14));const v=(150+rnd()*90)*amp*edge;if(v<45)continue;ctx.lineWidth=4;ctx.strokeStyle=`rgba(${v|0},${v|0},${v|0},0.85)`;ctx.beginPath();ctx.arc(ax,ay,r,Math.PI/2-a-0.006,Math.PI/2-a+0.006);ctx.stroke();ctx.lineWidth=10;ctx.strokeStyle=`rgba(${v|0},${v|0},${v|0},0.12)`;ctx.stroke();}});
+  }
+  if(scen.lung==='b')BLN.forEach(b=>{
+    const ang=b.a+0.022*Math.sin(ph),f=0.55+0.45*Math.max(0,Math.sin(ph+b.p));
+    let i=0;
+    for(let r=rp;r<R;r+=3,i++){
+      const n=b.n[i%b.n.length];
+      const v=f*(70+95*n+rnd()*30)*(1-0.15*(r-rp)/R);
+      ctx.lineWidth=3;
+      [[1.5,0.10],[1.0,0.22],[0.55,0.45]].forEach(([m,al])=>{ctx.strokeStyle=`rgba(${v|0},${v|0},${v|0},${al})`;ctx.beginPath();ctx.arc(ax,ay,r,Math.PI/2-ang-b.w*m/2,Math.PI/2-ang+b.w*m/2);ctx.stroke();});
+    }
+  });
+  for(let a=-0.32;a<0.32;a+=0.012){const v=170+rnd()*85;ctx.strokeStyle=`rgb(${v|0},${v|0},${v|0})`;ctx.lineWidth=4;ctx.beginPath();ctx.arc(ax,ay,rp,Math.PI/2-a-0.007,Math.PI/2-a+0.007);ctx.stroke();}
+  depthScale(890,ay,k,16,4);
+  ctx.strokeStyle='#cfd8dd';ctx.lineWidth=1;ctx.strokeRect(836,584,62,22);ctx.fillStyle='#e6edf1';ctx.font=MONO;ctx.textAlign='center';ctx.fillText('19.0 cm',867,600);
+  ctx.fillStyle='#3b8bd4';ctx.fillRect(ax+40,ay+4,10,10);
+  if(showCal){label('Pleural line',ax+70,ay+rp-6);leader(ax+68,ay+rp-10,ax+30,ay+rp-2);if(scen.lung==='b'){label('B-lines',ax+250,ay+11*k);leader(ax+248,ay+11*k-4,ax+Math.sin(0.13)*11*k+20,ay+Math.cos(0.13)*11*k);}else{label('A-lines',ax+200,ay+rp*2-8);leader(ax+198,ay+rp*2-12,ax+Math.sin(0.25)*rp*2,ay+Math.cos(0.25)*rp*2-2);}}
+  ctx.fillStyle='#e6edf1';ctx.font='600 16px "Barlow Condensed",sans-serif';ctx.textAlign='left';ctx.fillText('LUNG  ·  P5-1  ·  Cardiac',20,32);
+  ctx.font=MONO;ctx.fillStyle='#8fa0ab';['Phased array','Depth  19 cm','Lateral chest'].forEach((s,i)=>ctx.fillText(s,20,54+i*18));
+}
+function drawLungB(){
+  const {bx,by,bw,bh,k,pl}=lg;const slide=insp(simT)*14;const yP=by+pl*k;
+  ctx.save();ctx.beginPath();ctx.rect(bx+icsL,yP,icsR-icsL,bh-pl*k);ctx.clip();
+  ctx.drawImage(lungNoise,-100+slide,0,bw+200,bh,bx-100,by,bw+200,bh);
+  const B=scen.lung==='b';const bx0=[95,170,255,330].map(v=>bx+icsL+v+slide*0.9);
+  [3,4.5,6].forEach((d,i)=>{const y=by+d*k;const a=(B?0.2:0.75)*(1-i*0.22);for(let x=bx+icsL;x<bx+icsR;x+=3){const m=0.55+0.45*rnd();ctx.fillStyle=`rgba(225,225,225,${a*m})`;ctx.fillRect(x,y-2,3,4);ctx.fillStyle=`rgba(225,225,225,${a*m*0.3})`;ctx.fillRect(x,y-5,3,10);}});
+  if(B){bx0.forEach((x,i)=>{const wob=Math.sin(simT*2+i)*1.5;for(let y=yP;y<by+bh;y+=2){const w=6+(y-yP)*0.012;const v=200+rnd()*55;ctx.fillStyle=`rgba(${v|0},${v|0},${v|0},0.9)`;ctx.fillRect(x+wob-w/2,y,w,2);ctx.fillStyle='rgba(220,220,220,0.18)';ctx.fillRect(x+wob-w/2-4,y,w+8,2);}});}
+  ctx.restore();
+  ctx.drawImage(lungStatic,bx,by);
+  for(let x=Math.round(icsL);x<icsR;x+=2){const v=shimmer[(x+Math.round(slide*3)+900)%900];ctx.fillStyle=`rgb(${v|0},${v|0},${v|0})`;ctx.fillRect(bx+x,yP-2,2,4);}
+  [rib1,rib2].forEach(r=>{ctx.strokeStyle='#f0f0f0';ctx.lineWidth=4;ctx.beginPath();ctx.ellipse(bx+r.c,by+1.12*k,r.w/2,12,0,Math.PI,2*Math.PI);ctx.stroke();});
+  ctx.strokeStyle='#2a3640';ctx.lineWidth=1;ctx.strokeRect(bx+.5,by+.5,bw-1,bh-1);
+  depthScale(bx+bw+8,by,k,7,1);
+  ctx.setLineDash([4,5]);ctx.strokeStyle='rgba(255,255,255,.5)';ctx.beginPath();ctx.moveTo(bx+bw/2,by);ctx.lineTo(bx+bw/2,by+bh);ctx.stroke();ctx.setLineDash([]);
+  if(showCal){
+    label('Rib',bx+rib1.c,by+0.85*k,'center');label('Rib',bx+rib2.c,by+0.85*k,'center');
+    label('Rib shadow',bx+rib1.c,by+5.2*k,'center');
+    label('Pleural line',bx+bw/2+60,yP-14);leader(bx+bw/2+60,yP-10,bx+bw/2+30,yP-2);
+    if(B){label('B-lines',bx+bw-160,by+3.7*k);leader(bx+bw-150,by+3.7*k+4,bx0[3],by+4.1*k);}
+    else{label('A-lines',bx+bw-150,by+3.0*k-10);leader(bx+bw-120,by+3.0*k-6,bx+bw-130,by+3.0*k-2);}
+  }
+  ctx.fillStyle='#e6edf1';ctx.font='600 16px "Barlow Condensed",sans-serif';ctx.textAlign='left';ctx.fillText('LUNG  ·  L12-3',20,32);
+  ctx.font=MONO;ctx.fillStyle='#8fa0ab';['Depth  7 cm','Anterior chest','2nd ICS, MCL'].forEach((s,i)=>ctx.fillText(s,20,54+i*18));
+}
+
+function ivcPath(sh){return [[300,186+sh],[400,184+sh],[500,178+sh],[580,166+sh]];}
+function drawIvcB(){
+  ctx.drawImage(ivcStatic,0,0);
+  const D=diam(simT),sh=insp(simT)*0.9*iv.k,w=D*iv.k;
+  ctx.save();ctx.beginPath();ctx.moveTo(iv.ax,iv.ay);ctx.arc(iv.ax,iv.ay,iv.R,Math.PI/2+iv.ang,Math.PI/2-iv.ang,true);ctx.closePath();ctx.clip();
+  ctx.fillStyle='#d0d0d0';ctx.beginPath();ctx.ellipse(626,150+sh,46,38,0.2,0,2*Math.PI);ctx.fill();
+  ctx.fillStyle='#070707';ctx.beginPath();ctx.ellipse(626,150+sh,43,35,0.2,0,2*Math.PI);ctx.fill();
+  const p=ivcPath(sh);ctx.lineCap='round';ctx.lineJoin='round';
+  const stroke=(col,lw)=>{ctx.strokeStyle=col;ctx.lineWidth=lw;ctx.beginPath();ctx.moveTo(p[0][0],p[0][1]);for(let i=1;i<p.length;i++)ctx.lineTo(p[i][0],p[i][1]);ctx.lineTo(600,158+sh);ctx.stroke();};
+  stroke('#d6d6d6',w+5);
+  ctx.strokeStyle='#d6d6d6';ctx.lineWidth=13;ctx.beginPath();ctx.moveTo(566,92+sh);ctx.lineTo(590,160+sh);ctx.stroke();
+  stroke('#070707',w);
+  ctx.strokeStyle='#070707';ctx.lineWidth=9;ctx.beginPath();ctx.moveTo(566,92+sh);ctx.lineTo(590,160+sh);ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,.08)';for(let i=0;i<40;i++){ctx.fillRect(300+rnd()*300,175+sh+(rnd()-.5)*w*0.6,2,2);}
+  ctx.restore();
+  const cx=480,cy=180+sh;
+  ctx.setLineDash([4,5]);ctx.strokeStyle='rgba(255,255,255,.55)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(iv.ax,iv.ay);const L=Math.hypot(cx-iv.ax,cy-iv.ay);ctx.lineTo(iv.ax+(cx-iv.ax)/L*iv.R,iv.ay+(cy-iv.ay)/L*iv.R);ctx.stroke();ctx.setLineDash([]);
+  if(showCal){label('Liver',380,90);label('IVC',330,186+sh-w/2-10);label('RA',672,128+sh);label('HV',548,88+sh);}
+  ctx.fillStyle='#e6edf1';ctx.font='600 16px "Barlow Condensed",sans-serif';ctx.textAlign='left';ctx.fillText('IVC  ·  P5-1  ·  ABD',20,32);
+  ctx.font=MONO;ctx.fillStyle='#8fa0ab';['Subcostal long axis','Depth  15 cm','M-mode 2 cm from RA'].forEach((s,i)=>ctx.fillText(s,20,54+i*18));
+  ctx.fillStyle='#3b8bd4';ctx.fillRect(370,20,10,10);
+}
+
+function drawIjvB(){
+  const {bx,by,bw,bh,k}=ij;ctx.drawImage(ijvStatic,bx,by);
+  const D=diam(simT),sh=insp(simT)*0.06*k;
+  ctx.save();ctx.beginPath();ctx.rect(bx,by,bw,bh);ctx.clip();
+  const ca={x:bx+95,y:by+1.95*k+sh,r:0.4*k*(1+0.04*Math.sin(2*Math.PI*simT/HRP))};
+  ctx.fillStyle='#d8d8d8';ctx.beginPath();ctx.arc(ca.x,ca.y,ca.r+3,0,2*Math.PI);ctx.fill();ctx.fillStyle='#060606';ctx.beginPath();ctx.arc(ca.x,ca.y,ca.r,0,2*Math.PI);ctx.fill();
+  const cx=bx+bw/2,cy=by+1.62*k+sh,ry=Math.max(1.5,D/2*k),rx=0.62*k+ry*0.35;
+  ctx.fillStyle='#d2d2d2';ctx.beginPath();ctx.ellipse(cx,cy,rx+3,ry+3,0,0,2*Math.PI);ctx.fill();
+  ctx.fillStyle='#070707';ctx.beginPath();ctx.ellipse(cx,cy,rx,ry,0,0,2*Math.PI);ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,.07)';for(let i=0;i<25;i++){ctx.fillRect(cx+(rnd()-.5)*rx*1.4,cy+(rnd()-.5)*ry*1.2,2,2);}
+  ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,.6)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(cx,by);ctx.lineTo(cx,by+bh);ctx.stroke();
+  ctx.strokeStyle='#2a3640';ctx.strokeRect(bx+.5,by+.5,bw-1,bh-1);
+  depthScale(bx+bw+8,by,k,4,1);
+  ctx.fillStyle='#3b8bd4';ctx.fillRect(bx-26,by+6,10,10);
+  if(showCal){label('IJ',cx+rx+10,cy+5);label('CA',ca.x,ca.y+ca.r+18,'center');label('SCM',bx+bw-50,by+0.62*k,'center');}
+  ctx.fillStyle='#e6edf1';ctx.font='600 16px "Barlow Condensed",sans-serif';ctx.textAlign='left';ctx.fillText('IJV  ·  L12-3  ·  Venous',20,32);
+  ctx.font=MONO;ctx.fillStyle='#8fa0ab';['Short axis, right neck','Head of bed 30 to 45°','Depth  4 cm'].forEach((s,i)=>ctx.fillText(s,20,54+i*18));
+}
+
+/* ---------- overlays on M-mode ---------- */
+function mModeFrame(){
+  const g=G[tab];depthScale(g.mx1+8,g.my0,g.mk,g.mdepth,tab==='ivc'?3:1);
+  ctx.fillStyle='#8fa0ab';ctx.font=MONO;ctx.textAlign='left';
+  if(tab==='lung'){ctx.fillText('M-mode',g.mx0-150,g.my0+16);if(showCal){label(scen.lung==='a'?'Seashore sign':'Seashore sign (sliding present)',g.mx0+10,g.my1-10);}}
+  else{
+    ctx.fillStyle='#cfd8dd';ctx.font='600 18px "Barlow Condensed",sans-serif';ctx.textAlign='center';'DEPTH'.split('').forEach((c,i)=>ctx.fillText(c,30,(g.my0+g.my1)/2-44+i*22));
+    ctx.fillStyle='#cfd8dd';ctx.font='600 16px "Barlow Condensed",sans-serif';ctx.textAlign='center';ctx.fillText('TIME  →',(g.mx0+g.mx1)/2,g.my1+12>H?H-2:g.my1+12);
+  }
+}
+function bracket(x,yTop,yBot,text){
+  ctx.strokeStyle='#fff';ctx.lineWidth=2;const w=8,m=(yTop+yBot)/2;
+  ctx.beginPath();ctx.moveTo(x+w,yTop);ctx.quadraticCurveTo(x,yTop,x,yTop+6);ctx.lineTo(x,m-4);ctx.lineTo(x-6,m);ctx.lineTo(x,m+4);ctx.lineTo(x,yBot-6);ctx.quadraticCurveTo(x,yBot,x+w,yBot);ctx.stroke();
+  ctx.font='600 15px "Barlow Condensed",sans-serif';ctx.textAlign='right';ctx.lineWidth=3;ctx.strokeStyle='rgba(0,0,0,.8)';ctx.strokeText(text,x-10,m+5);ctx.fillStyle='#fff';ctx.fillText(text,x-10,m+5);
+}
+function measure(){
+  const g=G[tab];if(tab==='lung')return null;
+  const sw=g.mx0+((Math.floor(sweepX)-g.mx0)%(g.mx1-g.mx0));
+  let xa=-1,va=-1,xb=-1,vb=99;
+  for(let x=g.mx0+70;x<g.mx1-20;x++){if(Math.abs(x-sw)<16||isNaN(colD[x])||colS[x])continue;const v=colD[x];if(v>va){va=v;xa=x;}if(v<vb){vb=v;xb=x;}}
+  return xa<0?null:{xa,va,xb,vb};
+}
+function drawCalipers(m){
+  if(!showCal||!m)return;const g=G[tab],k=g.mk;
+  const c=tab==='ivc'?9:1.62;
+  const yOf=(x,D,top)=>{const t=simT;return g.my0+(c+0)*k+(top?-D/2:D/2)*k;};
+  const shAt=x=>{return 0;};
+  // walls are drawn with a per-column shift, so recompute from the trace: find dark run around center
+  const wall=(x)=>{let yC=null;const data=tx.getImageData(x,g.my0,1,g.my1-g.my0).data;let best=-1,bs=0,cur=0,cs=0;for(let j=0;j<g.my1-g.my0;j++){const v=data[j*4];if(v<22){if(cur===0)cs=j;cur++;if(cur>best){best=cur;bs=cs;}}else cur=0;}return best>0?[g.my0+bs,g.my0+bs+best]:null;};
+  const a=wall(m.xa),b=wall(m.xb);
+  if(a)bracket(m.xa-4,a[0]-2,a[1]+2,'D-max '+m.va.toFixed(2));
+  if(b)bracket(m.xb-4,b[0]-2,b[1]+2,'D-min '+m.vb.toFixed(2));
+}
+
+/* ---------- frame loop ---------- */
+let lastMeasure=null;
+function frame(now){
+  if(lastNow===null)lastNow=now;const dt=Math.min(0.05,(now-lastNow)/1000);lastNow=now;
+  const g=G[tab];
+  if(!frozen){
+    const target=sweepX+dt*SPEED;let x=Math.floor(sweepX)+1;
+    while(x<=Math.floor(target)){const cx=g.mx0+((x-g.mx0)%(g.mx1-g.mx0));drawCol(cx,simT+(x-sweepX)/SPEED);x++;}
+    simT+=dt;sweepX=target;
+    if(sniff&&sniff.pending&&simT-sniffAt>0.95)finishSniff();
+    if(sniff&&sniff.pending&&simT>=sniffAt){sniff.minD=Math.min(sniff.minD,diam(simT));}
+  }
+  ctx.fillStyle='#000';ctx.fillRect(0,0,W,H);
+  const noM=tab==='lung';
+  if(tab==='lung')(noM?drawLungPhased():drawLungB());else if(tab==='ivc')drawIvcB();else drawIjvB();
+  if(!noM){
+  ctx.drawImage(trace,0,g.my0,W,g.my1-g.my0,0,g.my0,W,g.my1-g.my0);
+  if(!frozen){const cx=g.mx0+((Math.floor(sweepX)-g.mx0)%(g.mx1-g.mx0));ctx.fillStyle='rgba(159,216,255,.55)';ctx.fillRect(cx+1,g.my0,2,g.my1-g.my0);}
+  mModeFrame();}
+  const m=measure();lastMeasure=m;drawCalipers(m);
+  if(sniffAmt(simT)>0.02){label('SNIFF',W-20,G[tab].my0-10,'right');}
+  if(frozen){ctx.fillStyle='#ffd166';ctx.font='600 16px "Barlow Condensed",sans-serif';ctx.textAlign='right';ctx.fillText('FROZEN',W-14,24);}
+  requestAnimationFrame(frame);
+}
+
+/* ---------- sniff ---------- */
+function startSniff(){if(tab==='lung'||frozen)return;sniffAt=simT+0.05;const s=sc();sniff={pending:true,pre:diam(simT),minD:99,result:null};}
+function finishSniff(){sniff.pending=false;const pre=Math.max(sniff.pre,sc().dmax*0.9);const frac=(pre-sniff.minD)/pre;sniff.frac=frac;sniff.result=frac>0.5?'collapse':'none';renderCards(true);}
+
+/* ---------- cards ---------- */
+const readCard=document.getElementById('readCard'),stepCard=document.getElementById('stepCard');
+function pill(cls,t){return `<span class="pill ${cls}">${t}</span>`;}
+function renderCards(force){
+  if(tab==='lung'){
+    const B=scen.lung==='b';
+    readCard.innerHTML=`<h2>What you are seeing</h2>
+      <div class="nums"><div><span>Sliding</span>Present</div><div><span>Artifact</span>${B?'B-lines':'A-lines'}</div><div><span>Zone</span>${B?'Positive':'Negative'}</div></div>
+      <p>${B?'On the phased array, B-lines fan out as bright radial bands from the pleural line to the bottom of the screen without fading. They move with sliding, come and go with each breath, and can merge into one wide band when confluent. Three or more in one intercostal space makes a positive zone.':'Horizontal reverberations of the pleural line repeat at equal intervals (about 4.8, 7.2 and 9.6 cm here, multiples of the 2.4 cm pleural depth). With lung sliding this is normally aerated lung, an A-profile.'}</p>`;
+    stepCard.innerHTML=`<h2>Interpretation</h2>
+      <ul class="steps">
+      <li><b>1</b><span>Find the bright pleural line just below the chest wall</span>${pill('ok','Done')}</li>
+      <li><b>2</b><span>Confirm sliding (shimmer at the pleural line)</span>${pill('ok','Present')}</li>
+      <li><b>3</b><span>Name the artifact below the pleura</span>${pill(B?'warn':'ok',B?'B-lines':'A-lines')}</li>
+      </ul>
+      <p class="verdict">${B?'Interstitial pattern. Bilateral, diffuse B-lines suggest pulmonary edema.':'A-profile. Dry, aerated lung at this zone.'}</p>
+      <p class="note">B-lines are not specific: pneumonia, ARDS and fibrosis cause them too. Pattern and distribution matter.</p>`;
+    return;
+  }
+  const m=lastMeasure,s=sc();
+  const dmax=m?m.va:s.dmax,dmin=m?m.vb:s.dmin,pct=(dmax-dmin)/dmax*100;
+  const sn=sniff&&sniff.result;
+  if(tab==='ijv'){
+    readCard.innerHTML=`<h2>Measurements</h2>
+      <div class="nums"><div><span>D-max</span>${dmax.toFixed(2)} cm</div><div><span>D-min</span>${dmin.toFixed(2)} cm</div><div><span>RVD</span>${pct.toFixed(0)}%</div></div>
+      <div class="formula">RVD = (Dmax − Dmin) / Dmax × 100 = (${dmax.toFixed(2)} − ${dmin.toFixed(2)}) / ${dmax.toFixed(2)} × 100 = ${pct.toFixed(0)}%</div>
+      <p class="note">Large change with breathing points to lower pressure; small change points to higher pressure. Press Sniff to test collapse.</p>
+      <p class="note"><a href="https://youtu.be/HhFeEgGY_9I" target="_blank" rel="noopener">Watch the IJV ultrasound video</a></p>`;
+    const s1=pct>=30,s2=dmax>=1.2;
+    let verdict;
+    if(!s1&&s2&&sn!=='collapse')verdict='Pattern suggests elevated RAP.';
+    else if(s1&&!s2&&sn!=='none')verdict='Pattern supports normal RAP.';
+    else verdict='Mixed findings. Integrate with the IVC and the clinical picture.';
+    stepCard.innerHTML=`<h2>Step by step</h2>
+      <ul class="steps">
+      <li><b>1</b><span>RVD ${pct.toFixed(0)}%. ≥ 30% likely normal RAP, &lt; 30% likely elevated</span>${s1?pill('ok','Likely normal'):pill('bad','Likely elevated')}</li>
+      <li><b>2</b><span>D-max ${dmax.toFixed(2)} cm. ≥ 1.2 cm supports elevation</span>${s2?pill('bad','Supports elevation'):pill('ok','Not dilated')}</li>
+      <li><b>3</b><span>Sniff test. Collapse is reassuring, no collapse is concerning</span>${sn==='collapse'?pill('ok','Collapses'):sn==='none'?pill('bad','No collapse'):pill('idle','Press Sniff')}</li>
+      </ul>
+      <p class="verdict">${verdict}</p>`;
+  }else{
+    const ra=sn?((sn==='collapse')):pct>50;
+    let rap,cls;
+    if(dmax<=2.1&&ra){rap='3 mmHg (0 to 5)';cls='ok';}
+    else if(dmax>2.1&&!ra){rap='15 mmHg (10 to 20)';cls='bad';}
+    else{rap='8 mmHg (5 to 10)';cls='warn';}
+    readCard.innerHTML=`<h2>Measurements</h2>
+      <div class="nums"><div><span>D-max</span>${dmax.toFixed(2)} cm</div><div><span>D-min</span>${dmin.toFixed(2)} cm</div><div><span>Collapse</span>${pct.toFixed(0)}%</div></div>
+      <div class="formula">Collapsibility = (Dmax − Dmin) / Dmax × 100 = ${pct.toFixed(0)}%</div>
+      <p class="note">Measure 1 to 2 cm from the RA junction, perpendicular to the IVC. The whole IVC moves with the diaphragm, so keep the cursor on the vessel to avoid false collapse.</p>`;
+    stepCard.innerHTML=`<h2>Estimated RA pressure</h2>
+      <ul class="steps">
+      <li><b>1</b><span>IVC D-max ${dmax.toFixed(2)} cm (cutoff 2.1 cm)</span>${dmax<=2.1?pill('ok','≤ 2.1 cm'):pill('bad','> 2.1 cm')}</li>
+      <li><b>2</b><span>Respiratory collapse ${pct.toFixed(0)}% (cutoff 50%)</span>${pct>50?pill('ok','> 50%'):pill('bad','< 50%')}</li>
+      <li><b>3</b><span>Sniff test</span>${sn==='collapse'?pill('ok','Collapses'):sn==='none'?pill('bad','No collapse'):pill('idle','Press Sniff')}</li>
+      </ul>
+      <p class="verdict">RAP about ${rap}</p>
+      <p class="note">Spontaneously breathing patients only. On positive pressure ventilation a small IVC still suggests low RAP, but a large one is hard to interpret.</p>`;
+  }
+}
+setInterval(()=>{if(!frozen)renderCards();},700);
+
+/* ---------- controls ---------- */
+const scenEl=document.getElementById('scen'),sniffBtn=document.getElementById('sniff');
+function buildScen(){
+  scenEl.innerHTML=SCEN[tab].map(s=>`<button data-id="${s.id}" aria-pressed="${scen[tab]===s.id}">${s.label}</button>`).join('');
+  scenEl.querySelectorAll('button').forEach(b=>b.onclick=()=>{scen[tab]=b.dataset.id;buildScen();resetSweep();renderCards(true);});
+  sniffBtn.hidden=tab==='lung';
+}
+document.querySelectorAll('[role=tab]').forEach(b=>b.onclick=()=>{
+  tab=b.dataset.tab;document.querySelectorAll('[role=tab]').forEach(o=>o.setAttribute('aria-selected',String(o===b)));
+  buildScen();resetSweep();renderCards(true);post();
+});
+sniffBtn.onclick=startSniff;
+const fb=document.getElementById('freeze');fb.onclick=()=>{frozen=!frozen;fb.textContent=frozen?'Unfreeze':'Freeze';fb.setAttribute('aria-pressed',String(frozen));lastNow=null;};
+const cb=document.getElementById('cal');cb.onclick=()=>{showCal=!showCal;cb.textContent=showCal?'Calipers on':'Calipers off';cb.setAttribute('aria-pressed',String(showCal));};
+function post(){try{parent.postMessage({labHeight:document.getElementById('lab').scrollHeight+48,lab:'volume-lab'},'*');}catch(e){}}
+window.addEventListener('load',post);window.addEventListener('resize',post);
+
+buildScen();resetSweep();renderCards(true);requestAnimationFrame(frame);
+})();
+</script>
+
+</html>
