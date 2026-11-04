@@ -229,25 +229,29 @@ const clamp=(x,a,b)=>Math.max(a,Math.min(b,x));
 const G=(x,m,s)=>Math.exp(-0.5*((x-m)/s)*((x-m)/s));
 function h2(i,j){const x=Math.sin(i*127.1+j*311.7)*43758.5453;return x-Math.floor(x);}
 function vn(x,y){const i=Math.floor(x),j=Math.floor(y),fx=x-i,fy=y-j,sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy);const a=h2(i,j),b=h2(i+1,j),c=h2(i,j+1),d=h2(i+1,j+1);return a+(b-a)*sx+(c-a)*sy+(a-b-c+d)*sx*sy;}
-const HALF=36,SVL=0.4;
+const HALF=33,SVL=0.4,R0=2.2;
 
 /* ================= geometry helpers ================= */
-function segNear(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy;let t=l?((px-ax)*dx+(py-ay)*dy)/l:0;t=clamp(t,0,1);const qx=ax+t*dx,qy=ay+t*dy,L=Math.sqrt(l)||1;return {d:Math.hypot(px-qx,py-qy),tx:dx/L,ty:dy/L};}
-function polyNear(px,py,pts){let b=null;for(let i=0;i<pts.length-1;i++){const r=segNear(px,py,pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1]);if(!b||r.d<b.d)b=r;}return b;}
+function segNear(px,py,ax,ay,bx,by){const dx=bx-ax,dy=by-ay,l=dx*dx+dy*dy;let t=l?((px-ax)*dx+(py-ay)*dy)/l:0;t=clamp(t,0,1);const qx=ax+t*dx,qy=ay+t*dy,L=Math.sqrt(l)||1;return {d:Math.hypot(px-qx,py-qy),tx:dx/L,ty:dy/L,t};}
+function polyNear(px,py,pts){let b=null;for(let i=0;i<pts.length-1;i++){const r=segNear(px,py,pts[i][0],pts[i][1],pts[i+1][0],pts[i+1][1]);if(!b||r.d<b.d){b=r;b.u=(i+r.t)/(pts.length-1);}}return b;}
+const rOf=(f,n)=>f.tap>0?f.r*(0.5+0.5*n.u):f.tap<0?f.r*(1-0.38*n.u):f.r;
 function offsetPoly(pts,o){return pts.map((p,i)=>{const a=pts[Math.max(0,i-1)],b=pts[Math.min(pts.length-1,i+1)];let tx=b[0]-a[0],ty=b[1]-a[1];const l=Math.hypot(tx,ty)||1;tx/=l;ty/=l;return [p[0]-ty*o,p[1]+tx*o];});}
-const sp=(x,y)=>0.22+1.3*vn(x*10,y*10)*vn(x*23+7,y*19+3);
+const sp=(x,y)=>Math.max(0.05,1+0.95*(vn(x*12+3.1,y*22+1.7)-0.5)+0.6*(vn(x*25+5,y*41+3)-0.5)+0.35*(h2(Math.floor(x*45),Math.floor(y*70))-0.5))*0.6;
+const liv=(x,y)=>0.5*(0.9+0.2*vn(x*0.55+4,y*0.55+2));
+function wallI(dr,x,y){if(dr<0.09)return 1.15;if(dr<0.62)return 0.3+(vn(x*1.8,dr*10)>0.72?0.55:0);if(dr<1.32)return 0.36*(0.75+0.5*Math.abs(Math.sin(dr*28+vn(x*1.2,y)*2.5)));if(dr<1.47)return 1.25;return null;}
 
 /* ================= views ================= */
 const J=[1.4,10.4];
-const KID={cx:0.3,cy:8.0,rx:5.0,ry:3.0};
+const KID={cx:0.4,cy:8.7,rx:4.6,ry:2.3};
 const ad=(a,b)=>Math.abs(((a-b)%360+540)%360-180);
 const kOut=th=>1-0.12*G(ad(th,180),0,26)+0.012*Math.sin(th*Math.PI/30);
-const KR=-13*Math.PI/180,KC=Math.cos(KR),KS=Math.sin(KR);
+const KR=-20*Math.PI/180,KC=Math.cos(KR),KS=Math.sin(KR);
 function kLoc(x,y){const dx=x-KID.cx,dy=y-KID.cy;return [(dx*KC+dy*KS)/KID.rx,(-dx*KS+dy*KC)/KID.ry];}
 function kPt(th,n){const r=th*Math.PI/180,q=n*kOut(th),lx=Math.sin(r)*KID.rx*q,ly=-Math.cos(r)*KID.ry*q;return [KID.cx+lx*KC-ly*KS,KID.cy+lx*KS+ly*KC];}
 const VANG=[-58,-36,-14,8,30,52,-80,74,-102,96,-124,118,-146,140],PYR=[];for(let c=-157;c<=157;c+=22)if(ad(c,180)>30)PYR.push(c);
 const COLS=PYR.map(c=>c+11).concat(PYR.map(c=>c-11));
-function sinR(th){let f=0;for(const c of COLS)f=Math.max(f,G(ad(th,c),0,4.5));return 0.45+0.045*f+0.5*G(ad(th,180),0,20)+0.035*Math.sin(th*Math.PI/12)+0.025*Math.sin(th*Math.PI/7+1);}
+function sinR(th){let f=0;for(const c of COLS)f=Math.max(f,G(ad(th,c),0,4.5));return 0.47+0.06*f+0.5*G(ad(th,180),0,20)+0.04*Math.sin(th*Math.PI/12)+0.03*Math.sin(th*Math.PI/7+1);}
+const SINL=new Float32Array(721),PYD=new Float32Array(721);for(let i=0;i<721;i++){const th=i/2-180;SINL[i]=sinR(th);let d=99;for(const c of PYR){const e=ad(th,c);if(e<d)d=e;}PYD[i]=d;}
 const PAIRS=[],ARC=[],SEG=[],HS=kPt(180,0.5),BR=[kPt(-40,0.22),kPt(42,0.2),kPt(-138,0.26),kPt(140,0.25)];
 VANG.forEach((g,i)=>{const S=kPt(g,sinR(g)-0.03),C=kPt(g,0.79),dx=C[0]-S[0],dy=C[1]-S[1],L=Math.hypot(dx,dy),px=-dy/L,py=dx/L;
   const P1=[S[0]+dx*0.36+px*0.09,S[1]+dy*0.36+py*0.09],P2=[S[0]+dx*0.7-px*0.05,S[1]+dy*0.7-py*0.05],base=[S,P1,P2,C];
@@ -257,43 +261,44 @@ VANG.forEach((g,i)=>{const S=kPt(g,sinR(g)-0.03),C=kPt(g,0.79),dx=C[0]-S[0],dy=C
 const MRV=[HS,kPt(180,0.95),kPt(180,1.25)];
 const VIEWS={
  hv:{name:'Hepatic vein',depth:15.5,cell:3,lat:0.22,
-  flow:[{id:'hv',type:'hv',pts:[[-4.4,4.0],[-2.7,6.0],[-1.1,7.9],[0.3,9.5],[1.4,10.4]],r:0.42,sens:1},
-        {id:'hv2',type:'hv',pts:[[3.4,4.2],[2.8,6.5],[2.2,8.7],[1.7,10.1]],r:0.32,sens:1},
+  flow:[{id:'hv',type:'hv',pts:[[-4.4,4.0],[-3.0,5.5],[-1.9,6.9],[-1.0,8.0],[0.3,9.4],[1.4,10.4]],r:0.46,sens:1,tap:1},
+        {id:'hv2',type:'hv',pts:[[3.4,4.2],[3.0,5.6],[2.75,6.9],[2.2,8.7],[1.7,10.1]],r:0.36,sens:1,tap:1},
         {id:'ivc',type:'ivc',pts:[[-9,12.4],[-4,11.9],[0,11.4],[3.3,11.0]],r:1.0,sens:0.9}],
-  draw:[['hv',0.02,0.1,0.12],['hv2',0.02,0.1,0.12],['ivc',0.02,0.5,0.22]],
-  ell:[{cx:5.7,cy:10.6,rx:2.8,ry:2.3,lum:0.02,wall:0.55,ww:0.12}],
+  draw:[['hv',0.025,0,0],['hv2',0.025,0,0],['ivc',0.02,0.8,0.09]],
+  ell:[{cx:5.7,cy:10.6,rx:2.8,ry:2.3,lum:0.02,wall:0.7,ww:0.08}],enh:['ivc','RA'],
+  deco:[[-3.6,7.9,0.16,1.15],[1.9,5.6,0.2,1.2],[-2.5,9.7,0.24,1.2],[0.8,6.8,0.11,0],[-0.4,5.2,0.1,0]],
   box:{a:-4,w:24,d0:6.2,d1:11.6},gate:{a:-32,d:4.6},find:[-1.1,7.9],
   labels:[['LIVER',-1.2,4.3],['HV',-3.3,6.9],['IVC',-4.6,12.15],['RA',5.4,10.7]],
-  bgf(x,y){const dy=14.7+0.012*x*x;if(y>dy+0.4)return 0.15;if(y>dy)return 1.35;return 0.55;}},
+  bgf(x,y){const dy=14.5+0.014*x*x;if(y>dy+0.42)return liv(x,y)*1.05;if(y>dy)return 1.6;return liv(x,y);}},
  pv:{name:'Portal vein',depth:15.5,cell:3,lat:0.25,
-  flow:[{id:'pv',type:'pv',pts:[[-2.2,13.0],[-1.4,11.5],[-0.5,10.0],[0.5,8.6],[1.6,7.3],[2.6,6.3],[3.4,5.6]],r:0.6,sens:1},
+  flow:[{id:'pv',type:'pv',pts:[[-2.2,13.0],[-1.4,11.5],[-0.5,10.0],[0.5,8.6],[1.6,7.3],[2.6,6.3],[3.4,5.6]],r:0.62,sens:1,tap:-1},
         {id:'ha',type:'ha',pts:[[-1.44,13.57],[-0.64,12.07],[0.26,10.57],[0.9,9.6]],r:0.21,sens:1}],
-  draw:[['pv',0.02,1.5,0.14],['ha',0.05,0.9,0.08]],
-  ell:[{cx:-5.6,cy:14.0,rx:2.0,ry:1.1,lum:0.02,wall:0.6,ww:0.12}],
+  draw:[['pv',0.02,1.7,0.08],['ha',0.05,1.1,0.05]],
+  ell:[{cx:-5.6,cy:14.0,rx:2.0,ry:1.1,lum:0.02,wall:0.7,ww:0.07}],enh:['pv','RA'],
+  deco:[[-2.9,7.0,0.24,0],[2.4,10.6,0.17,1.15],[-3.5,10.3,0.18,1.15],[3.8,9.0,0.14,0],[-1.2,5.4,0.12,1.1]],
   box:{a:3,w:24,d0:6.8,d1:12.6},gate:{a:-34,d:4.6},find:[0.5,8.6],
   labels:[['LIVER',-2.4,5.0],['PV',-1.9,9.3],['HA',1.25,11.0],['IVC',-5.6,14.05]],
-  bgf(x,y){return y>14.9?0.3:0.55;}},
- irv:{name:'Intrarenal vein',depth:13,cell:2,lat:0.12,
+  bgf(x,y){const dy=14.6+0.013*x*x;if(y>dy+0.42)return liv(x,y)*1.05;if(y>dy)return 1.6;return liv(x,y);}},
+ irv:{name:'Intrarenal vein',depth:13.5,cell:2,lat:0.12,
   flow:[].concat(...PAIRS.map((p,i)=>[{id:'ira'+i,type:'ira',pts:p.art,r:0.08,sens:0.45},{id:'irv'+i,type:'irv',pts:p.vein,r:0.08,sens:0.45}]),
         ...ARC.map((p,i)=>[{id:'aa'+i,type:'ira',pts:p.art,r:0.06,sens:0.35},{id:'av'+i,type:'irv',pts:p.vein,r:0.06,sens:0.35}]),
         ...BR.map((b,i)=>{const t=[HS,[(HS[0]+b[0])/2,(HS[1]+b[1])/2+0.1],b];return [{id:'ta'+i,type:'mra',pts:offsetPoly(t,0.1),r:0.08,sens:0.5},{id:'tv'+i,type:'mrv',pts:offsetPoly(t.slice().reverse(),0.1),r:0.09,sens:0.5}];}),
         ...SEG.map((p,i)=>[{id:'sa'+i,type:'mra',pts:p.art,r:0.065,sens:0.5},{id:'sv'+i,type:'mrv',pts:p.vein,r:0.075,sens:0.5}]),
         [{id:'mrv',type:'mrv',pts:MRV,r:0.26,sens:0.8},{id:'mra',type:'mra',pts:offsetPoly(MRV.slice().reverse(),0.42),r:0.14,sens:0.8}]),
   draw:[['mrv',0.08,0.7,0.06]],ell:[],
-  box:{a:0,w:44,d0:4.3,d1:9.6},gate:{a:-38,d:3.4},find:PAIRS[3].mid,
-  labels:[['LIVER',-2.2,2.4],['CORTEX',...kPt(-80,0.9)],['PYRAMID',...kPt(-91,0.63)],['SINUS FAT',...kPt(-150,0.12)]],
-  bgf(x,y){const [nx,ny]=kLoc(x,y),th=Math.atan2(nx,-ny)*180/Math.PI,rho=Math.hypot(nx,ny)/kOut(th),fk=0.75+0.5*vn(x*16,y*16);
-    if(y<1.1)return 0.45+0.35*vn(x*0.6,y*9);
-    if(rho>1.13){if(ny<0)return 0.55;return 0.24+0.2*vn(x*1.2,y*7);}
+  box:{a:0,w:44,d0:4.9,d1:10.3},gate:{a:-30,d:3.6},find:PAIRS[3].mid,
+  labels:[['LIVER',-2.6,4.7],['CORTEX',...kPt(-80,0.9)],['PYRAMID',...kPt(-91,0.63)],['SINUS FAT',...kPt(-150,0.12)]],
+  bgf(x,y){const [nx,ny]=kLoc(x,y),th=Math.atan2(nx,-ny)*180/Math.PI,rho=Math.hypot(nx,ny)/kOut(th),ti=Math.round((th+180)*2),sr=SINL[ti];
+    const FO=1.035+0.2*(1-Math.cos(th*Math.PI/180))/2+0.03*vn(th*0.15,1.7);
+    if(rho>FO){const above=ny<0.2||(x<KID.cx-KID.rx*0.9&&y<12);return above?liv(x,y):(0.5+0.4*vn(x*1.6,y*2.4))*clamp(1.15-(rho-FO)*0.35,0.6,1.15);}
     const hil=ad(th,180)<17;
-    if(rho>1.012)return hil?0.85:0.8*(0.7+0.6*vn(x*3,y*3));
-    if(rho>0.982)return hil?0.85:1.45;
-    if(rho<sinR(th))return (0.8+0.45*vn(x*4,y*4))*clamp(0.75+(sinR(th)-rho)*6,0.75,1.05);
-    if(hil)return 0.85;
-    if(rho>0.8)return 0.42*fk;
-    let d=99;for(const c of PYR){const e=ad(th,c);if(e<d)d=e;}
-    const hw=2+8*clamp((rho-0.46)/0.3,0,1)-2*clamp((rho-0.73)/0.06,0,1),edge=clamp((d-hw+2.2)/4.4,0,1),cap=clamp((rho-sinR(th))/0.07,0,1),sn=clamp((sinR(th)+0.05-rho)/0.05,0,1);
-    const py=1-edge*edge*(3-2*edge);return ((0.43-0.24*py*cap)*(1-sn)+0.75*sn)*fk;}}};
+    if(rho>1.02)return (0.78+0.5*vn(x*2.6,y*2.6))*(hil?1.05:1);
+    if(rho>0.985)return hil?1.0:1.4;
+    if(rho<sr)return 1.18*(0.68+0.6*vn(x*3.2,y*3.2))*clamp(0.8+(sr-rho)*5,0.8,1.05);
+    if(hil)return 1.0;
+    if(rho>0.8)return 0.34;
+    const d=PYD[ti],hw=2+8*clamp((rho-0.46)/0.3,0,1)-2*clamp((rho-0.73)/0.06,0,1),edge=clamp((d-hw+2.2)/4.4,0,1),cap=clamp((rho-sr)/0.07,0,1),sn=clamp((sr+0.05-rho)/0.05,0,1),py=1-edge*edge*(3-2*edge);
+    return (0.34-0.15*py*cap)*(1-sn)+1.0*sn;}}};
 for(const k in VIEWS){const V=VIEWS[k];V.byId={};V.flow.forEach(f=>V.byId[f.id]=f);V.types=[...new Set(V.flow.map(f=>f.type))];}
 
 /* ================= patients and flow ================= */
@@ -317,10 +322,10 @@ function U(type,t){const b=beatAt(t),tq=t-b.s,rr=b.rr,sinus=PAT.rh!=='af';
   const Dc=300+0.22*rr,resp=1+0.06*Math.sin(2*Math.PI*t/4300);
   const A=sinus?G(tq,rr-75,34):0,S=G(tq,170,62),V=G(tq,330,26),D=G(tq,Dc,66);let u=0;
   if(type==='hv'||type==='ivc'){switch(PAT.hv){
-    case 'normal':u=3+34*S+22*D-13*A-5*V;break;
-    case 'mild':u=3+13*S+27*D-15*A-8*V;break;
+    case 'normal':u=8+30*S+18*D-18*A-6*V;break;
+    case 'mild':u=6+9*S+23*D-20*A-10*V;break;
     case 'severe':u=2-22*G(tq,130,80)+30*D-7*A;break;
-    case 'af':u=3+15*S+26*D-5*V;break;
+    case 'af':u=6+11*S+22*D-6*V;break;
     default:u=15+3*G(tq,170,90)+2*G(tq,Dc,90);}
     if(type==='ivc')u=u*0.75+5;}
   else if(type==='pv'){const q=PVP[PAT.pv],x=0.5+0.5*Math.cos(2*Math.PI*(tq-Dc)/rr);u=q[1]+(q[0]-q[1])*Math.pow(x,1.3);}
@@ -341,7 +346,7 @@ const c2=$('c2d'),x2=c2.getContext('2d'),cp=$('csp'),xp=cp.getContext('2d');
 let W2=0,H2=0,Wp=0,Hp=0,dpr=1;
 function resize(){dpr=Math.min(2,window.devicePixelRatio||1);W2=c2.clientWidth;H2=c2.clientHeight;c2.width=Math.round(W2*dpr);c2.height=Math.round(H2*dpr);x2.setTransform(dpr,0,0,dpr,0,0);
   Wp=cp.clientWidth;Hp=cp.clientHeight;cp.width=Math.round(Wp*dpr);cp.height=Math.round(Hp*dpr);xp.setTransform(dpr,0,0,dpr,0,0);renderBG();computeCells();}
-function geo(){const top=20;return {cx:W2/2,top,s:(H2-top-8)/VIEW.depth};}
+function geo(){const s=(H2-28)/(VIEW.depth-R0);return {cx:W2/2,top:20-R0*s,s};}
 const toCm=(px,py)=>{const {cx,top,s}=geo();return [(px-cx)/s,(py-top)/s];};
 const toPx=(x,y)=>{const {cx,top,s}=geo();return [cx+x*s,top+y*s];};
 const polar=(x,y)=>[Math.atan2(x,y)*180/Math.PI,Math.hypot(x,y)];
@@ -349,24 +354,30 @@ const fromPolar=(a,d)=>{const r=a*Math.PI/180;return [d*Math.sin(r),d*Math.cos(r
 
 /* ---- B-mode background ---- */
 const bg=document.createElement('canvas'),xbg=bg.getContext('2d');
-function tissue(x,y){const V=VIEW;
-  if(y<0.35)return 0.7*sp(x,y);
-  for(const [id,lum,wall,ww] of V.draw){const f=V.byId[id],n=polyNear(x,y,f.pts);if(n.d<f.r)return lum;if(n.d<f.r+ww)return wall*sp(x,y);}
-  for(const e of V.ell){const q=Math.hypot((x-e.cx)/e.rx,(y-e.cy)/e.ry);if(q<1)return e.lum;if(q<1+e.ww)return e.wall*sp(x,y);}
-  return V.bgf(x,y)*sp(x,y)*(1-0.32*y/V.depth);}
-function renderBG(){if(!W2)return;const q=Math.min(1.3,dpr)*0.75,bw=Math.round(W2*q),bh=Math.round(H2*q);bg.width=bw;bg.height=bh;
+function inFluid(x,y){const V=VIEW;for(const id of V.enh||[]){if(id==='RA'){for(const e of V.ell)if(Math.hypot((x-e.cx)/e.rx,(y-e.cy)/e.ry)<1)return true;continue;}const f=V.byId[id];if(f){const n=polyNear(x,y,f.pts);if(n.d<rOf(f,n))return true;}}return false;}
+function tissue(x,y){const V=VIEW,r=Math.hypot(x,y),dr=r-R0;
+  const w=wallI(dr,x,y);if(w!=null)return w*sp(x,y);
+  const lumN=()=>0.008+0.022*h2(Math.floor(x*30),Math.floor(y*50));
+  for(const [dx,dy,rr,wl] of V.deco||[]){const d=Math.hypot((x-dx)*1.15,y-dy);if(d<rr*0.8)return lumN();if(d<rr)return 0.18*sp(x,y);if(wl&&d<rr+0.09)return wl*sp(x,y)*(0.8+0.4*vn(x*9,y*9));}
+  for(const [id,lum,wall,ww] of V.draw){const f=V.byId[id],n=polyNear(x,y,f.pts),rr=rOf(f,n);if(n.d<rr-0.06)return lumN();if(n.d<rr)return (0.08+0.25*(1-(rr-n.d)/0.06))*sp(x,y);if(ww&&n.d<rr+ww)return wall*sp(x,y);}
+  for(const e of V.ell){const q=Math.hypot((x-e.cx)/e.rx,(y-e.cy)/e.ry);if(q<0.97)return lumN();if(q<1)return 0.2*sp(x,y);if(q<1+e.ww)return e.wall*sp(x,y);}
+  let I=V.bgf(x,y);
+  if(V.enh)for(const k of [0.45,0.95,1.6]){const f=1-k/r;if(f<=0)break;if(inFluid(x*f,y*f)){I*=1.3-0.12*(k>1?1:0);break;}}
+  const e=Math.abs(Math.atan2(x,y))*180/Math.PI/HALF;
+  return I*sp(x,y)*(1-0.22*dr/(V.depth-R0))*(1-0.35*Math.pow(e,6));}
+function renderBG(){if(!W2)return;const q=Math.min(1.5,dpr),bw=Math.round(W2*q),bh=Math.round(H2*q);bg.width=bw;bg.height=bh;
   const im=xbg.createImageData(bw,bh),D=im.data,{cx,top,s}=geo(),dep=VIEW.depth;
   for(let j=0;j<bh;j++)for(let i=0;i<bw;i++){const x=((i+0.5)/q-cx)/s,y=((j+0.5)/q-top)/s;let I=0;
-    if(y>0){const r=Math.hypot(x,y);if(r<=dep&&Math.abs(Math.atan2(x,y))*180/Math.PI<=HALF)I=tissue(x,y);}
+    if(y>0){const r=Math.hypot(x,y);if(r>=R0&&r<=dep&&Math.abs(Math.atan2(x,y))*180/Math.PI<=HALF)I=tissue(x,y);}
     const v=Math.round(255*Math.pow(clamp(I*0.62,0,1),0.85)),k=(j*bw+i)*4;D[k]=v;D[k+1]=v;D[k+2]=Math.min(255,v+3);D[k+3]=255;}
-  xbg.putImageData(im,0,0);}
+  xbg.putImageData(im,0,0);try{const t=document.createElement('canvas');t.width=bw;t.height=bh;const xt=t.getContext('2d');xt.filter='blur(0.55px)';xt.drawImage(bg,0,0);xbg.clearRect(0,0,bw,bh);xbg.drawImage(t,0,0);}catch(e){}}
 
 /* ---- color Doppler cells ---- */
 let cells=[],tcells=[];
 function inBox(x,y){const [a,r]=polar(x,y);return r>=box.d0&&r<=box.d1&&Math.abs(a-box.a)<=box.w/2&&Math.abs(a)<=HALF;}
 function computeCells(){cells=[];tcells=[];if(!W2)return;const V=VIEW,{cx,top,s}=geo(),st=V.cell;
-  for(let py=top;py<H2;py+=st)for(let px=0;px<W2;px+=st){const x=(px+st/2-cx)/s,y=(py+st/2-top)/s;if(!inBox(x,y))continue;
-    let best=null;for(const f of V.flow){const n=polyNear(x,y,f.pts);if(n.d<f.r&&(!best||n.d/f.r<best.q))best={f,q:n.d/f.r,n};}
+  for(let py=Math.max(0,top);py<H2;py+=st)for(let px=0;px<W2;px+=st){const x=(px+st/2-cx)/s,y=(py+st/2-top)/s;if(!inBox(x,y))continue;
+    let best=null;for(const f of V.flow){const n=polyNear(x,y,f.pts),rr=rOf(f,n);if(n.d<rr&&(!best||n.d/rr<best.q))best={f,q:n.d/rr,n};}
     if(best){const r=Math.hypot(x,y),cos=(best.n.tx*(-x)+best.n.ty*(-y))/r;cells.push([px,py,best.f.type,cos*(1-0.65*best.q*best.q)*best.f.sens]);}
     else if(((px+py)/st)%2===0)tcells.push([px,py]);}}
 const POS=[],NEG=[];
@@ -377,7 +388,7 @@ const cmap=vn=>{const i=Math.min(63,Math.floor(Math.abs(vn)*64));return vn>=0?PO
 /* ---- gate ---- */
 function computeGate(){const V=VIEW,a=gate.a*Math.PI/180,bx=Math.sin(a),by=Math.cos(a),qx=by,qy=-bx;const cnt={};
   for(let i=-3;i<=3;i++)for(let j=-1;j<=1;j++){const d=gate.d+i*SVL/6,l=j*V.lat,px=bx*d+qx*l,py=by*d+qy*l;let best=null;
-    for(const f of V.flow){const n=polyNear(px,py,f.pts);if(n.d<f.r&&(!best||n.d/f.r<best.q))best={f,q:n.d/f.r};}if(best)cnt[best.f.id]=(cnt[best.f.id]||0)+1;}
+    for(const f of V.flow){const n=polyNear(px,py,f.pts),rr=rOf(f,n);if(n.d<rr&&(!best||n.d/rr<best.q))best={f,q:n.d/rr};}if(best)cnt[best.f.id]=(cnt[best.f.id]||0)+1;}
   const gx=bx*gate.d,gy=by*gate.d,r=Math.hypot(gx,gy);
   const hits=Object.keys(cnt).map(id=>{const f=V.byId[id],n=polyNear(gx,gy,f.pts);return {id,type:f.type,w:Math.min(1,cnt[id]/7),cos:(n.tx*(-gx)+n.ty*(-gy))/r,br:0.4};});
   let st='none',main=null;const has=t=>hits.find(h=>h.type===t);
@@ -415,7 +426,7 @@ const bpos=()=>clamp(0.5-S.bl/100*0.45,0.05,0.95);
 function velToRow(v){const span=2*S.ps,top=span*bpos();while(v>top)v-=span;while(v<=top-span)v+=span;return (top-v)/span*MB_H;}
 function rowToVel(fr){const span=2*S.ps;return span*bpos()-fr*span;}
 const inten=new Float32Array(MB_H);
-function writeCol(t){xs.drawImage(sb,-1,0);tB.copyWithin(0,1);eB.copyWithin(0,1);vB.copyWithin(0,1);
+function writeCol(t,at){if(at==null){xs.drawImage(sb,-1,0);tB.copyWithin(0,1);eB.copyWithin(0,1);vB.copyWithin(0,1);at=MB_W-1;}
   inten.fill(0);const step=2*S.ps/MB_H;
   if(S.pw){for(const h of gate.hits){const v=U(h.type,t)*h.cos;if(Math.abs(v)<0.4)continue;const env=v*(1+(Math.random()-0.5)*0.06*(1+h.br*3)),lo=v*(0.06+0.2*(1-h.br));
       const n=Math.min(400,Math.ceil(Math.abs(env-lo)/step*1.5)+2);for(let k=0;k<=n;k++){const f=k/n,vv=lo+(env-lo)*f,row=Math.floor(velToRow(vv));if(row<0||row>=MB_H)continue;
@@ -424,8 +435,8 @@ function writeCol(t){xs.drawImage(sb,-1,0);tB.copyWithin(0,1);eB.copyWithin(0,1)
     const b0=Math.floor(bpos()*MB_H);for(let r=b0-2;r<=b0+2;r++)if(r>=0&&r<MB_H)inten[r]+=0.18*Math.random();}
   const col=xs.createImageData(1,MB_H),D=col.data;
   for(let y=0;y<MB_H;y++){let I=inten[y]+(S.pw?0.05*Math.random()*Math.random():0);const v=Math.round(255*Math.pow(clamp(I,0,1),0.8)),k=y*4;D[k]=v;D[k+1]=v;D[k+2]=Math.min(255,v+6);D[k+3]=255;}
-  xs.putImageData(col,MB_W-1,0);tB[MB_W-1]=t;eB[MB_W-1]=ecg(t);vB[MB_W-1]=gate.main&&S.pw?U(gate.main.type,t)*gate.main.cos:NaN;}
-function prefill(){const st=1000/(S.sweep*4);for(let i=0;i<MB_W;i++){writeCol(tSim);tSim+=st;}}
+  xs.putImageData(col,at,0);tB[at]=t;eB[at]=ecg(t);vB[at]=gate.main&&S.pw?U(gate.main.type,t)*gate.main.cos:NaN;}
+function prefill(){const st=1000/(S.sweep*4);for(let i=0;i<MB_W;i++){writeCol(tSim,i);tSim+=st;}}
 function fresh(){cal=[];clearBuf();prefill();updMeas();}
 
 /* ================= drawing ================= */
@@ -439,9 +450,9 @@ function draw2d(){const {cx,top,s}=geo(),dep=VIEW.depth;x2.fillStyle='#000';x2.f
     x2.beginPath();x2.arc(cx,top,box.d0*s,a0,a1,true);x2.arc(cx,top,box.d1*s,a1,a0,false);x2.closePath();x2.stroke();
     const bx=W2-18,bt=top+26,bh=110,g=x2.createLinearGradient(0,bt,0,bt+bh);g.addColorStop(0,POS[63]);g.addColorStop(0.25,POS[32]);g.addColorStop(0.5,'#000');g.addColorStop(0.75,NEG[32]);g.addColorStop(1,NEG[63]);
     x2.fillStyle=g;x2.fillRect(bx,bt,8,bh);x2.fillStyle='#c9d3de';x2.font='600 9.5px "JetBrains Mono",monospace';x2.textAlign='right';x2.fillText('+'+cs,bx+9,bt-5);x2.fillText('−'+cs,bx+9,bt+bh+12);x2.fillText('cm/s',bx+9,bt+bh+23);}
-  x2.strokeStyle='rgba(255,255,255,.07)';x2.lineWidth=1;x2.beginPath();x2.moveTo(cx,top);x2.arc(cx,top,dep*s,(90+HALF)*Math.PI/180,(90-HALF)*Math.PI/180,true);x2.closePath();x2.stroke();
-  x2.fillStyle='#8392a3';x2.font='600 9.5px Inter,sans-serif';x2.textAlign='left';for(let d=0;d<=dep;d+=2){const y=top+d*s;x2.fillRect(W2-36,y,5,1);if(d<=dep-1)x2.fillText(d,W2-29,y+3.5);}
-  x2.fillStyle='#4cc9f0';x2.beginPath();x2.moveTo(cx-14,top-14);x2.lineTo(cx+14,top-14);x2.lineTo(cx+9,top);x2.lineTo(cx-9,top);x2.closePath();x2.fill();
+  x2.strokeStyle='rgba(255,255,255,.07)';x2.lineWidth=1;x2.beginPath();x2.arc(cx,top,R0*s,(90-HALF)*Math.PI/180,(90+HALF)*Math.PI/180,false);x2.arc(cx,top,dep*s,(90+HALF)*Math.PI/180,(90-HALF)*Math.PI/180,true);x2.closePath();x2.stroke();
+  x2.fillStyle='#8392a3';x2.font='600 9.5px Inter,sans-serif';x2.textAlign='left';for(let d=0;d<=dep-R0;d+=2){const y=top+(R0+d)*s;x2.fillRect(W2-36,y,5,1);if(d<=dep-R0-1)x2.fillText(d,W2-29,y+3.5);}
+  {const fy=top+R0*s;x2.fillStyle='#4cc9f0';x2.beginPath();x2.moveTo(cx-16,fy-15);x2.lineTo(cx+16,fy-15);x2.lineTo(cx+12,fy-3);x2.lineTo(cx-12,fy-3);x2.closePath();x2.fill();}
   x2.fillStyle='#c9d3de';x2.font='600 10.5px "JetBrains Mono",monospace';x2.textAlign='left';
   [`${S.preset==='abd'?'ABD':'CARD'}  C5-1`,`CF ${S.color?S.cs+' cm/s  G'+S.cg:'off'}`,`PW ${S.pw?S.ps+' cm/s  SV 4mm':'off'}`].forEach((t,i)=>x2.fillText(t,10,16+i*14));
   if(S.pw){const [ex,ey]=fromPolar(gate.a,dep),p1=toPx(ex,ey);x2.strokeStyle='rgba(255,255,255,.55)';x2.setLineDash([2,4]);x2.lineWidth=1.2;x2.beginPath();x2.moveTo(cx,top);x2.lineTo(p1[0],p1[1]);x2.stroke();x2.setLineDash([]);
@@ -502,12 +513,12 @@ c2.addEventListener('pointerdown',e=>{const r=c2.getBoundingClientRect(),px=e.cl
   if(S.pw&&Math.hypot(px-gp[0],py-gp[1])<26)drag={k:'gate'};
   else if(S.color&&inBox(x,y)){const [a,d]=polar(x,y);drag={k:'box',a0:a,d0:d,b:{...box}};}
   else if(S.pw){drag={k:'gate'};moveGate(x,y);}
-  else if(S.color){const [a,d]=polar(x,y),h=(box.d1-box.d0)/2;box.a=clamp(a,-HALF+box.w/2,HALF-box.w/2);box.d0=clamp(d-h,0.5,VIEW.depth-2*h);box.d1=box.d0+2*h;computeCells();drag={k:'box',a0:a,d0:d,b:{...box}};}
+  else if(S.color){const [a,d]=polar(x,y),h=(box.d1-box.d0)/2;box.a=clamp(a,-HALF+box.w/2,HALF-box.w/2);box.d0=clamp(d-h,R0+0.2,VIEW.depth-2*h);box.d1=box.d0+2*h;computeCells();drag={k:'box',a0:a,d0:d,b:{...box}};}
   else return;c2.setPointerCapture(e.pointerId);});
 c2.addEventListener('pointermove',e=>{if(!drag)return;const r=c2.getBoundingClientRect(),[x,y]=toCm(e.clientX-r.left,e.clientY-r.top);
-  if(drag.k==='gate')moveGate(x,y);else{const [a,d]=polar(x,y),b=drag.b,h=b.d1-b.d0;box.a=clamp(b.a+a-drag.a0,-HALF+b.w/2,HALF-b.w/2);box.d0=clamp(b.d0+d-drag.d0,0.5,VIEW.depth-h);box.d1=box.d0+h;computeCells();}});
+  if(drag.k==='gate')moveGate(x,y);else{const [a,d]=polar(x,y),b=drag.b,h=b.d1-b.d0;box.a=clamp(b.a+a-drag.a0,-HALF+b.w/2,HALF-b.w/2);box.d0=clamp(b.d0+d-drag.d0,R0+0.2,VIEW.depth-h);box.d1=box.d0+h;computeCells();}});
 c2.addEventListener('pointerup',()=>drag=null);
-function moveGate(x,y){const [a,d]=polar(x,y);gate.a=clamp(a,-HALF+1,HALF-1);gate.d=clamp(d,1,VIEW.depth-0.5);computeGate();}
+function moveGate(x,y){const [a,d]=polar(x,y);gate.a=clamp(a,-HALF+1,HALF-1);gate.d=clamp(d,R0+0.3,VIEW.depth-0.5);computeGate();}
 function setGatePt(x,y){const [a,d]=polar(x,y);gate.a=a;gate.d=d;computeGate();}
 
 /* ================= controls ================= */
