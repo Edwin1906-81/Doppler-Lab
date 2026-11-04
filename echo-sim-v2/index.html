@@ -1,43 +1,49 @@
 <title>TTE &amp; TEE Simulator</title>
 <meta name="claude:viewport-fit-sides" content="cover">
 <link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans+Condensed:wght@500;600&family=IBM+Plex+Sans:wght@400;500;600&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@600;700&family=Barlow+Semi+Condensed:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
 <style>
-/* Layout: scanner console. Live echo is the hero; probe + 3D heart and controls sit beside it (stacked on phones). */
+/* Layout: ultrasound console. Live echo is the hero; views, wall motion, probe and 3D heart sit beside it (stacked on phones).
+   Single dark look by design (scan room). Shares its palette and type with the RV Function Lab. */
 :root {
-  --bg: #0b0e10;          /* console body */
-  --panel: #12171a;       /* control deck */
-  --line: #222b30;        /* hairlines */
-  --fg: #dfe6e8;          /* primary text */
-  --muted: #8a989d;       /* secondary text */
-  --accent: #57c7d4;      /* scanner cyan: active controls, sector outline */
-  --marker: #f0b43c;      /* index marker amber */
-  --ecg: #4fdc7a;         /* ECG trace */
-  --font-display: "IBM Plex Sans Condensed", "Arial Narrow", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #0a0e11;          /* room */
+  --panel: #11171b;       /* console */
+  --well: #172027;        /* recessed controls */
+  --line: #25313a;        /* hairlines */
+  --fg: #dbe4e9;
+  --muted: #8d9ca6;
+  --accent: #5fd3c6;      /* scanner cyan: values, sector outline */
+  --marker: #e9a23b;      /* index marker amber, active state */
+  --ecg: #4fd18b;
+  --font-display: "Barlow Condensed", "Arial Narrow", sans-serif;
+  --font-body: "Barlow Semi Condensed", "Segoe UI", system-ui, sans-serif;
   --font-mono: "IBM Plex Mono", ui-monospace, "SF Mono", Menlo, monospace;
   color-scheme: dark;
 }
 html, body { background: var(--bg); color: var(--fg); }
-body { font-family: var(--font-body); font-size: 14px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 12px 24px; }
+body { font-family: var(--font-body); font-size: 15px; line-height: 1.4; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); padding-block: 14px 26px; }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 button, input { font: inherit; color: inherit; }
 button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg-g:focus { outline: none; }
+.seg-g:focus-visible path { stroke: var(--accent); stroke-width: 2.4; }
 
-.top { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto 12px; }
-.brand { display: flex; align-items: baseline; gap: 10px; min-width: 0; }
-.brand h1 { font-family: var(--font-display); font-weight: 600; font-size: 1.35rem; letter-spacing: 0.02em; margin: 0; text-wrap: balance; }
-.brand .sub { color: var(--muted); font-size: 0.82rem; }
-.seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; background: var(--panel); }
-.seg button { border: 0; background: transparent; padding: 7px 16px; font-family: var(--font-display); font-weight: 600; letter-spacing: 0.08em; font-size: 0.9rem; color: var(--muted); cursor: pointer; }
-.seg button[aria-pressed="true"] { background: var(--accent); color: #062026; }
+.top { display: flex; align-items: flex-end; justify-content: space-between; gap: 12px; flex-wrap: wrap; max-width: 1400px; margin: 0 auto 14px; }
+.brand { min-width: 0; }
+.brand small { display: block; font-family: var(--font-mono); font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+.brand h1 { font-family: var(--font-display); font-weight: 700; font-size: clamp(28px, 3.6vw, 38px); line-height: 1; margin: 3px 0 0; letter-spacing: 0.01em; text-wrap: balance; }
+.brand h1 span { color: var(--marker); }
+.seg { display: inline-flex; gap: 2px; border: 1px solid var(--line); border-radius: 8px; padding: 3px; background: var(--panel); }
+.seg button { border: 0; background: transparent; padding: 7px 18px; border-radius: 6px; font-family: var(--font-body); font-weight: 600; letter-spacing: 0.06em; font-size: 0.95rem; color: var(--muted); cursor: pointer; }
+.seg button[aria-pressed="true"] { background: var(--well); color: var(--fg); box-shadow: inset 0 -2px 0 var(--marker); }
 
-.stage { display: grid; grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr); gap: 14px; max-width: 1400px; margin: 0 auto; }
+.stage { display: grid; grid-template-columns: minmax(0, 1.3fr) minmax(0, 1fr); gap: 16px; max-width: 1400px; margin: 0 auto; align-items: start; }
 @media (max-width: 860px) {
   .stage { grid-template-columns: minmax(0, 1fr); }
   .col { display: contents; }
   .scope { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; order: 1; }
-  .transport { order: 2; } #viewsDeck { order: 3; } #v3 { order: 4; } #probeDeck { order: 5; } .note { order: 6; }
+  .transport { order: 2; } #viewsDeck { order: 3; } #wmDeck { order: 4; } #v3 { order: 5; } #probeDeck { order: 6; } .note { order: 7; }
 }
 .col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
 
@@ -45,29 +51,63 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .scope canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .view3d { position: relative; background: #0a0d0f; border-radius: 10px; overflow: hidden; aspect-ratio: 4 / 3; max-width: 100%; border: 1px solid var(--line); touch-action: none; cursor: grab; }
 .view3d canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-.view3d .hint { position: absolute; left: 10px; bottom: 8px; font-size: 0.72rem; color: var(--muted); pointer-events: none; }
-.view3d .tools { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; }
+.view3d .hint { position: absolute; left: 10px; bottom: 8px; font-size: 0.75rem; color: var(--muted); pointer-events: none; }
+.view3d .tools { position: absolute; right: 8px; top: 8px; display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
 
-.chip { border: 1px solid var(--line); background: var(--panel); border-radius: 999px; padding: 6px 12px; font-size: 0.8rem; cursor: pointer; white-space: nowrap; color: var(--fg); }
-.chip[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); background: #0f2328; }
-.chip.small { padding: 4px 10px; font-size: 0.74rem; background: rgba(18,23,26,0.85); }
+.chip { border: 1px solid var(--line); background: var(--well); border-radius: 999px; padding: 5px 12px; font-size: 0.85rem; cursor: pointer; white-space: nowrap; color: var(--fg); }
+.chip[aria-pressed="true"] { border-color: var(--marker); color: var(--marker); background: rgba(233,162,59,0.09); }
+.chip.small { padding: 4px 10px; font-size: 0.78rem; background: rgba(17,23,27,0.88); }
 
-.deck { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; display: flex; flex-direction: column; gap: 12px; }
-.deck h2 { font-family: var(--font-display); font-weight: 600; font-size: 0.78rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin: 0; }
+.deck { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 14px; display: flex; flex-direction: column; gap: 12px; }
+.deck h2 { font-family: var(--font-mono); font-weight: 600; font-size: 0.7rem; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin: 0; }
 .views { display: flex; flex-wrap: wrap; gap: 6px; }
 .status { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
 .status .near { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); }
 .status .near.off { color: var(--muted); }
 
+/* wall motion deck */
+.wm { display: grid; grid-template-columns: minmax(150px, 220px) minmax(0, 1fr); gap: 14px; align-items: start; }
+@media (max-width: 480px) { .wm { grid-template-columns: minmax(0, 1fr); } .wm svg { max-width: 240px; margin: 0 auto; } }
+.wm svg { width: 100%; height: auto; display: block; }
+.seg-g { cursor: pointer; }
+.seg-g path { stroke: #0a0e11; stroke-width: 1.4; transition: fill-opacity 0.15s; }
+.seg-g:hover path { fill-opacity: 0.8 !important; }
+.seg-g.sel path { stroke: #ffffff; stroke-width: 2.2; }
+.segnum { font-family: var(--font-mono); font-size: 9px; font-weight: 600; fill: #0a0e11; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.segwm { font-family: var(--font-mono); font-size: 7.5px; font-weight: 600; fill: #0a0e11; text-anchor: middle; dominant-baseline: middle; pointer-events: none; }
+.wm-side { display: flex; flex-direction: column; gap: 10px; min-width: 0; }
+.segname { font-weight: 600; font-size: 1rem; }
+.pick { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 5px; }
+.pick button { border: 1px solid var(--line); background: var(--well); border-radius: 6px; padding: 6px 8px; font-size: 0.85rem; text-align: left; cursor: pointer; }
+.pick button small { font-family: var(--font-mono); color: var(--muted); margin-right: 4px; }
+.pick button[aria-pressed="true"] { border-color: var(--marker); color: var(--marker); }
+.pick button:disabled { opacity: 0.4; cursor: default; }
+.wmsi { display: flex; align-items: baseline; gap: 10px; }
+.wmsi b { font-family: var(--font-display); font-size: 1.9rem; font-variant-numeric: tabular-nums; line-height: 1; }
+.wmsi span { color: var(--muted); font-size: 0.85rem; }
+.row-btns { display: flex; flex-wrap: wrap; gap: 6px; }
+.seglist { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 14px; }
+@media (max-width: 480px) { .seglist { grid-template-columns: minmax(0, 1fr); } }
+.sgh { font-family: var(--font-mono); font-size: 0.66rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); margin-bottom: 3px; }
+.srow2 { display: grid; grid-template-columns: 12px 1.6em minmax(0, 1fr) auto; align-items: center; gap: 8px; width: 100%; border: 1px solid transparent; background: none; border-radius: 6px; padding: 3px 6px; text-align: left; cursor: pointer; font-size: 0.88rem; }
+.srow2:hover { background: var(--well); }
+.srow2[aria-pressed="true"] { border-color: var(--marker); background: rgba(233,162,59,0.08); }
+.srow2 i { width: 12px; height: 12px; border-radius: 3px; opacity: 0.75; }
+.srow2 b { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); font-weight: 500; }
+.srow2 span { min-width: 0; }
+.srow2 em { font-style: normal; font-family: var(--font-mono); font-size: 0.68rem; }
+.srow2 em[data-s="2"] { color: #d8c24e; } .srow2 em[data-s="3"] { color: #e9a23b; } .srow2 em[data-s="4"] { color: #e2675a; }
+.legend { font-size: 0.78rem; color: var(--muted); line-height: 1.45; }
+
 .sliders { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px 16px; }
 @media (max-width: 520px) { .sliders { grid-template-columns: minmax(0, 1fr); } }
 .sl { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
-.sl .lab { display: flex; justify-content: space-between; gap: 8px; font-size: 0.8rem; }
-.sl .lab span:last-child { font-family: var(--font-mono); color: var(--accent); font-variant-numeric: tabular-nums; }
-.sl .ends { display: flex; justify-content: space-between; font-size: 0.68rem; color: var(--muted); }
+.sl .lab { display: flex; justify-content: space-between; gap: 8px; font-size: 0.88rem; }
+.sl .lab span:last-child { font-family: var(--font-mono); font-size: 0.8rem; color: var(--accent); font-variant-numeric: tabular-nums; }
+.sl .ends { display: flex; justify-content: space-between; font-size: 0.72rem; color: var(--muted); }
 .sl .row { display: flex; align-items: center; gap: 6px; }
 .sl .row input { flex: 1; min-width: 0; }
-.nudge { border: 1px solid var(--line); background: var(--bg); border-radius: 6px; width: 30px; height: 28px; cursor: pointer; font-family: var(--font-mono); }
+.nudge { border: 1px solid var(--line); background: var(--well); border-radius: 6px; width: 30px; height: 28px; cursor: pointer; font-family: var(--font-mono); }
 input[type=range] { -webkit-appearance: none; appearance: none; height: 28px; background: transparent; width: 100%; }
 input[type=range]::-webkit-slider-runnable-track { height: 4px; background: var(--line); border-radius: 2px; }
 input[type=range]::-moz-range-track { height: 4px; background: var(--line); border-radius: 2px; }
@@ -76,15 +116,16 @@ input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 
 
 .transport { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .transport .grow { flex: 1 1 140px; min-width: 0; }
-.btn { border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 0.82rem; }
-.btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
-.note { color: var(--muted); font-size: 0.74rem; line-height: 1.45; max-width: 70ch; }
+.btn { border: 1px solid var(--line); background: var(--well); border-radius: 8px; padding: 7px 12px; cursor: pointer; font-size: 0.88rem; font-weight: 600; }
+.btn[aria-pressed="true"] { border-color: var(--marker); color: var(--marker); }
+.btn:disabled { opacity: 0.4; cursor: default; }
+.note { color: var(--muted); font-size: 0.78rem; line-height: 1.45; max-width: 70ch; }
 .err { padding: 24px; color: var(--fg); }
-@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } }
+@media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto; } .seg-g path { transition: none; } }
 </style>
 
 <div class="top">
-  <div class="brand"><h1>TTE &amp; TEE Simulator</h1><span class="sub">Pulmonary POCUS</span></div>
+  <div class="brand"><small>pulmonarypocus.com · Echo Sim</small><h1>TTE &amp; TEE <span>Simulator</span></h1></div>
   <div class="seg" role="group" aria-label="Modality">
     <button id="mTTE" aria-pressed="true">TTE</button><button id="mTEE" aria-pressed="false">TEE</button>
   </div>
@@ -99,19 +140,41 @@ input[type=range]::-moz-range-thumb { width: 16px; height: 16px; border-radius: 
       <div class="sl grow"><div class="lab"><span>Gain</span><span id="gainV">50</span></div><input type="range" id="gain" min="0" max="100" value="50"></div>
       <button class="btn" id="labels" aria-pressed="true">Labels</button>
     </div>
+    <div class="view3d" id="v3"><canvas id="c3"></canvas>
+      <div class="tools"><button class="chip small" id="cut" aria-pressed="false">Cut heart</button><button class="chip small" id="skin" aria-pressed="true">Chest wall</button><button class="chip small" id="reset3">Reset view</button></div>
+      <span class="hint">Drag to rotate · scroll or pinch to zoom</span>
+    </div>
   </div>
   <div class="col">
     <div class="deck" id="viewsDeck">
       <div class="status"><h2 id="viewsTitle">Standard views</h2><span class="near" id="near"></span></div>
       <div class="views" id="views"></div>
     </div>
+    <div class="deck" id="wmDeck">
+      <div class="status"><h2>LV wall motion · ASE 17 segments</h2><div class="wmsi"><span>WMSI</span><b id="wmsi">1.00</b></div></div>
+      <div class="wm">
+        <svg id="bullseye" viewBox="-106 -102 212 204" aria-label="Bullseye map of the 17 LV segments">
+          <text x="0" y="-93" text-anchor="middle" fill="#8d9ca6" font-size="8" font-family="IBM Plex Mono, monospace">ANTERIOR</text>
+          <text x="0" y="99" text-anchor="middle" fill="#8d9ca6" font-size="8" font-family="IBM Plex Mono, monospace">INFERIOR</text>
+          <text x="-98" y="0" text-anchor="middle" fill="#8d9ca6" font-size="8" font-family="IBM Plex Mono, monospace" transform="rotate(-90 -98 0)">SEPTAL</text>
+          <text x="98" y="0" text-anchor="middle" fill="#8d9ca6" font-size="8" font-family="IBM Plex Mono, monospace" transform="rotate(90 98 0)">LATERAL</text>
+        </svg>
+        <div class="wm-side">
+          <div><div class="segname" id="segName">Tap a segment on the map</div><span class="legend" id="wmsiNote"></span></div>
+          <div class="pick" id="wmPick" role="group" aria-label="Wall motion of the selected segment">
+            <button data-s="1"><small>1</small>Normal</button><button data-s="2"><small>2</small>Hypokinetic</button>
+            <button data-s="3"><small>3</small>Akinetic</button><button data-s="4"><small>4</small>Dyskinetic</button>
+          </div>
+          <div class="row-btns"><button class="btn" id="segOn" aria-pressed="true">Segment colors on</button><button class="btn" id="segNums" aria-pressed="true">On image: names</button><button class="btn" id="segAll">Show all</button></div>
+        </div>
+      </div>
+      <div><h2 style="margin-bottom:8px">Segments</h2><div class="seglist" id="segList"></div></div>
+      <div><h2 style="margin-bottom:8px">Patterns</h2><div class="views" id="wmPresets"></div></div>
+      <p class="legend">Tap a segment to isolate it on the image, then set its motion. Letters on the map: H hypokinetic, A akinetic, D dyskinetic. Scores follow the ASE wall motion score (1 to 4); WMSI is their mean across 17 segments. Coronary patterns use the typical ASE territories, which vary between patients.</p>
+    </div>
     <div class="deck" id="probeDeck">
       <h2>Probe</h2>
       <div class="sliders" id="sliders"></div>
-    </div>
-    <div class="view3d" id="v3"><canvas id="c3"></canvas>
-      <div class="tools"><button class="chip small" id="cut" aria-pressed="false">Cut heart</button><button class="chip small" id="skin" aria-pressed="true">Chest wall</button><button class="chip small" id="reset3">Reset view</button></div>
-      <span class="hint">Drag to rotate · scroll or pinch to zoom</span>
     </div>
     <p class="note">Simulated images from an original 3D heart model, for teaching probe manipulation and view recognition. Not for clinical measurement.</p>
   </div>
@@ -508,6 +571,41 @@ function ecg(t) {
 }
 if (typeof module !== 'undefined') module.exports = { cyc, ecg };
 
+// ===== ASE 17-segment model: names, map colours, label anchors =====
+const SEG = {
+  names: ['Basal anterior', 'Basal anteroseptal', 'Basal inferoseptal', 'Basal inferior', 'Basal inferolateral', 'Basal anterolateral',
+    'Mid anterior', 'Mid anteroseptal', 'Mid inferoseptal', 'Mid inferior', 'Mid inferolateral', 'Mid anterolateral',
+    'Apical anterior', 'Apical septal', 'Apical inferior', 'Apical lateral', 'Apex'],
+  // one distinct see-through colour per segment; neighbours never share a hue
+  hex: ['#ff5c5c', '#ffa23a', '#f2d43c', '#7ed957', '#3cc9a8', '#4aa8ff',
+    '#c77dff', '#ff6fb5', '#ffd08a', '#b8f26b', '#5ee0ff', '#8c8cff',
+    '#ff8a5c', '#e6f26b', '#6bf2c1', '#d98cff', '#ffffff'],
+  // heart-frame angle (deg) centres; ring6 order A, AS, IS, I, IL, AL; ring4 A, S, I, L
+  c6: [25, 88, 149, 207, 269, 328], c4: [32, 116, 208, 312],
+  score: { 1: 1.0, 2: 0.45, 3: 0.0, 4: -0.38 },
+  words: { 1: 'Normal', 2: 'Hypokinetic', 3: 'Akinetic', 4: 'Dyskinetic' },
+};
+SEG.rgb = SEG.hex.map((h) => [1, 3, 5].map((i) => parseInt(h.slice(i, i + 2), 16) / 255));
+SEG.anchor = (() => { // mid-wall label points in body coordinates (end-diastole)
+  const out = [];
+  const mid = (z) => { const r0 = 2.5 * Math.sqrt(Math.max(0, 1 - ((z + 2.5) / 5.6) ** 2)), re = 3.5 * Math.sqrt(Math.max(0, 1 - ((z + 2.3) / 6.4) ** 2)); return (r0 + re) / 2; };
+  const at = (deg, z) => { const r = mid(z), a = deg * Math.PI / 180; return toB([r * Math.cos(a), r * Math.sin(a), z]); };
+  SEG.c6.forEach((d) => out.push(at(d, -1.2)));
+  SEG.c6.forEach((d) => out.push(at(d, -3.9)));
+  SEG.c4.forEach((d) => out.push(at(d, -6.3)));
+  out.push(toB([0, 0, -8.35]));
+  return out;
+})();
+SEG.presets = {
+  'Normal': {},
+  'LAD infarct': { 1: 2, 2: 2, 7: 3, 8: 3, 13: 3, 14: 3, 16: 3, 17: 3 },
+  'RCA infarct': { 3: 2, 4: 3, 9: 2, 10: 3, 15: 2 },
+  'LCx infarct': { 5: 3, 6: 2, 11: 3, 12: 2, 16: 2 },
+  'Apical aneurysm': { 7: 2, 8: 3, 13: 4, 14: 4, 15: 3, 16: 3, 17: 4 },
+  'Apical ballooning': { 7: 2, 8: 2, 9: 2, 10: 2, 11: 2, 12: 2, 13: 3, 14: 3, 15: 3, 16: 3, 17: 3 },
+  'Global hypokinesis': Object.fromEntries(Array.from({ length: 17 }, (_, i) => [i + 1, 2])),
+};
+
 // ===== GLSL generation: heart SDF in the heart frame, warp, valves, body tissues =====
 const f = (x) => (Math.round(x * 10000) / 10000).toFixed(4);
 const v3 = (v) => `vec3(${f(v[0])},${f(v[1])},${f(v[2])})`;
@@ -555,6 +653,49 @@ float sdRoundCone(vec3 p, vec3 a, vec3 b, float r1, float r2){
 float smin(float a, float b, float k){ float h = clamp(0.5+0.5*(b-a)/k,0.,1.); return mix(b,a,h)-k*h*(1.-h); }
 float sdSeg2(vec2 p, vec2 a, vec2 b){ vec2 pa=p-a, ba=b-a; float h=clamp(dot(pa,ba)/dot(ba,ba),0.,1.); return length(pa-ba*h); }
 
+// ---- ASE 17-segment model (heart frame; angle measured in the short-axis plane) ----
+// Ring order: anterior, anteroseptal, inferoseptal, inferior, inferolateral, anterolateral.
+// Boundaries were fitted so A4C cuts IS/AL, A2C cuts A/I and A3C cuts AS/IL, as on a real echo.
+uniform float uWM[17];      // contraction factor per segment (1 normal, 0 akinetic, <0 dyskinetic)
+uniform float uSegOn, uSegSel;
+uniform vec3 uSegCol[17];
+const float BD6[7] = float[7](-5.0, 56.0, 121.0, 177.0, 238.0, 301.0, 355.0);
+const float BD4[5] = float[5](-5.0, 70.0, 163.0, 253.0, 355.0);
+const float Z_BM = -2.6, Z_MA = -5.2, Z_AC = -7.7;
+float angDeg(vec2 xy){ return degrees(atan(xy.y, xy.x + 1e-6)); }
+int ring6Idx(float a){ if (a < -5.0) a += 360.0; if (a >= 355.0) a -= 360.0; int i = 0; for (int k = 0; k < 6; k++) if (a >= BD6[k]) i = k; return i; }
+int ring4Idx(float a){ if (a < -5.0) a += 360.0; if (a >= 355.0) a -= 360.0; int i = 0; for (int k = 0; k < 4; k++) if (a >= BD4[k]) i = k; return i; }
+int segOf(vec3 q){
+  float a = angDeg(q.xy);
+  if (q.z > Z_BM) return ring6Idx(a);
+  if (q.z > Z_MA) return 6 + ring6Idx(a);
+  if (q.z > Z_AC) return 12 + ring4Idx(a);
+  return 16;
+}
+float ring6Val(int b, float a){
+  if (a < -5.0) a += 360.0; if (a >= 355.0) a -= 360.0;
+  int i = ring6Idx(a);
+  float v = uWM[b + i];
+  v = mix(uWM[b + (i + 5) % 6], v, smoothstep(-9.0, 9.0, a - BD6[i]));
+  v = mix(v, uWM[b + (i + 1) % 6], smoothstep(-9.0, 9.0, a - BD6[i + 1]));
+  return v;
+}
+float ring4Val(int b, float a){
+  if (a < -5.0) a += 360.0; if (a >= 355.0) a -= 360.0;
+  int i = ring4Idx(a);
+  float v = uWM[b + i];
+  v = mix(uWM[b + (i + 3) % 4], v, smoothstep(-10.0, 10.0, a - BD4[i]));
+  v = mix(v, uWM[b + (i + 1) % 4], smoothstep(-10.0, 10.0, a - BD4[i + 1]));
+  return v;
+}
+float wmAt(float z, float a){
+  float v = ring6Val(0, a);
+  v = mix(ring6Val(6, a), v, smoothstep(Z_BM - 0.5, Z_BM + 0.5, z));
+  v = mix(ring4Val(12, a), v, smoothstep(Z_MA - 0.5, Z_MA + 0.5, z));
+  v = mix(uWM[16], v, smoothstep(Z_AC - 0.4, Z_AC + 0.4, z));
+  return v;
+}
+
 // ---- inverse warp: current heart-frame point -> end-diastolic reference ----
 vec3 warpInv(vec3 h){
   float d = uDesc, zap = -8.7, ztop = 5.0;
@@ -565,7 +706,7 @@ vec3 warpInv(vec3 h){
   float wl = 1.0 - smoothstep(6.5, 10.0, rho);
   z0 = mix(z, z0, wl);
   float lam = (-d - zap)/(-zap);
-  float k = 1.0 - 0.28*uS;
+  float k = 1.0 - 0.28*uS*wmAt(z0, angDeg(h.xy));
   float zc = clamp((z0 + 2.5)/5.6, -1.0, 1.0); float r0 = 2.5*sqrt(max(0.0, 1.0 - zc*zc));
   float ze = clamp((z0 + 2.3)/6.4, -1.0, 1.0); float re0 = 3.5*sqrt(max(0.0, 1.0 - ze*ze));
   float rt = k*r0;
@@ -945,7 +1086,16 @@ ${AN.hv.map((s) => `      hv = min(hv, sdRoundCone(P, ${v3(s[0])}, ${v3(s[1])}, 
   I += 0.02*noise*(0.4 + r/uDepth);
   float disp = log(1.0 + 10.0*max(I,0.0))/log(11.0);
   disp = clamp(pow(disp, 1.6)*1.1, 0.0, 1.0);
-  frag = vec4(vec3(disp)*vec3(1.0, 0.985, 0.95), 1.0);
+  vec3 col = vec3(disp)*vec3(1.0, 0.985, 0.95);
+  if (uSegOn > 0.5 && heartEnv(P) < 1.5 && q.z < 0.35) {
+    float myo = smoothstep(0.06, -0.06, s.lvEpi) * smoothstep(-0.06, 0.06, s.lvCav) * smoothstep(-0.05, 0.05, s.blood);
+    if (myo > 0.01) {
+      int sg = segOf(q);
+      float al = uSegSel < -0.5 ? 0.5 : (abs(float(sg) - uSegSel) < 0.5 ? 0.72 : 0.1);
+      col = mix(col, uSegCol[sg]*(0.35 + 0.9*disp) + 0.08*uSegCol[sg], al*myo);
+    }
+  }
+  frag = vec4(col, 1.0);
 }`;
 }
 
@@ -1022,6 +1172,7 @@ vec3 heartColor(vec3 p, vec3 n, out float spec){
     float v = valveSDF(q);
     if (v < 0.05) return vec3(0.92,0.88,0.8);
     if (s.blood < 0.0) return vec3(0.32,0.03,0.05);
+    if (uSegOn > 0.5 && s.lvEpi < 0.0 && s.lvCav > 0.0 && q.z < 0.35) { int sg = segOf(q); float al = uSegSel < -0.5 ? 0.8 : (abs(float(sg) - uSegSel) < 0.5 ? 0.9 : 0.15); return mix(vec3(0.72,0.33,0.31), uSegCol[sg], al); }
     return vec3(0.72,0.33,0.31);
   }
   vec3 myo = vec3(0.6,0.15,0.14);
@@ -1032,6 +1183,7 @@ vec3 heartColor(vec3 p, vec3 n, out float spec){
   vec2 sepDir = normalize(vec2(-0.83, 0.56));
   float ivg = exp(-pow(abs(dot(normalize(q.xy+1e-4), vec2(-sepDir.y, sepDir.x)))*3.2, 2.0)) * smoothstep(0.0, -1.0, q.z) * step(float(s.id), 1.5) * step(0.0, dot(q.xy, sepDir));
   c = mix(c, vec3(0.9,0.78,0.45), clamp(avg*0.75 + ivg*0.6, 0.0, 0.85));
+  if (uSegOn > 0.5 && abs(s.lvEpi) < 0.3 && s.lvCav > 0.0 && q.z < 0.35) { int sg = segOf(q); float al = uSegSel < -0.5 ? 0.75 : (abs(float(sg) - uSegSel) < 0.5 ? 0.9 : 0.12); c = mix(c, uSegCol[sg], al); }
   // subtle surface mottling
   c *= 0.9 + 0.1*sin(q.x*3.1 + sin(q.y*2.3) + q.z*1.7);
   return c;
@@ -1155,6 +1307,7 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
 
   const st = {
     mode: 'tte', playing: true, hr: 72, gain: 50, labels: true, cut: false, skin: true, phase: 0, time: 0,
+    wm: Array(17).fill(1), segOn: true, segSel: -1, segLbl: 'names',
     tte: { view: 'A4C', dx: 0, dz: 0, rot: 0, tilt: 0, rock: 0, depth: TTE.A4C.depth },
     tee: { view: 'ME 4C', ...pick(TEE['ME 4C']), D: TEE['ME 4C'].D },
     cam: { yaw: 0.75, pitch: 0.38, dist: 56 },
@@ -1262,6 +1415,86 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
   toggle('labels', 'labels'); toggle('cut', 'cut'); toggle('skin', 'skin');
   $('reset3').addEventListener('click', () => { st.cam = st.mode === 'tte' ? { yaw: 0.75, pitch: 0.38, dist: 56 } : { yaw: 2.3, pitch: 0.25, dist: 40 }; dirty = true; });
 
+  // ---- LV wall motion deck: bullseye map, scoring, presets ----
+  const svgNS = 'http://www.w3.org/2000/svg';
+  function arcPath(r0, r1, a0, a1) { // degrees, 0 = 3 o'clock, counterclockwise, SVG y down
+    const P = (r, a) => [r * Math.cos(a * Math.PI / 180), -r * Math.sin(a * Math.PI / 180)];
+    const [x0, y0] = P(r1, a0), [x1, y1] = P(r1, a1), [x2, y2] = P(r0, a1), [x3, y3] = P(r0, a0);
+    const lg = (a1 - a0) > 180 ? 1 : 0;
+    if (r0 <= 0) return `M0 0 L${x0} ${y0} A${r1} ${r1} 0 ${lg} 0 ${x1} ${y1} Z`;
+    return `M${x0} ${y0} A${r1} ${r1} 0 ${lg} 0 ${x1} ${y1} L${x2} ${y2} A${r0} ${r0} 0 ${lg} 1 ${x3} ${y3} Z`;
+  }
+  // Standard bullseye orientation: anterior at 12 o'clock, septum on the left, lateral on the right, inferior at 6 o'clock.
+  const BE = [];
+  const ring6 = [[60, 120], [120, 180], [180, 240], [240, 300], [300, 360], [0, 60]]; // A, AS, IS, I, IL, AL
+  ring6.forEach(([a0, a1]) => BE.push([62, 90, a0, a1]));
+  ring6.forEach(([a0, a1]) => BE.push([34, 62, a0, a1]));
+  [[45, 135], [135, 225], [225, 315], [-45, 45]].forEach(([a0, a1]) => BE.push([14, 34, a0, a1]));
+  BE.push([0, 14, 0, 360]);
+  const beSvg = $('bullseye');
+  const beEls = BE.map(([r0, r1, a0, a1], i) => {
+    const g = document.createElementNS(svgNS, 'g'); g.setAttribute('class', 'seg-g'); g.setAttribute('tabindex', '0'); g.setAttribute('role', 'button');
+    const path = document.createElementNS(svgNS, 'path');
+    path.setAttribute('d', i === 16 ? `M0 -14 A14 14 0 1 0 0.01 -14 Z` : arcPath(r0, r1, a0, a1));
+    path.setAttribute('fill', SEG.hex[i]);
+    const am = i === 16 ? 0 : (a0 + a1) / 2, rm = i === 16 ? 0 : (r0 + r1) / 2;
+    const tx = rm * Math.cos(am * Math.PI / 180), ty = -rm * Math.sin(am * Math.PI / 180);
+    const t = document.createElementNS(svgNS, 'text'); t.setAttribute('x', tx); t.setAttribute('y', ty - 2.5); t.textContent = i + 1; t.setAttribute('class', 'segnum');
+    const t2 = document.createElementNS(svgNS, 'text'); t2.setAttribute('x', tx); t2.setAttribute('y', ty + 7); t2.setAttribute('class', 'segwm');
+    g.append(path, t, t2); beSvg.appendChild(g);
+    const pick = () => { st.segSel = st.segSel === i ? -1 : i; if (!st.segOn) { st.segOn = true; } syncWM(); dirty = true; };
+    g.addEventListener('click', pick);
+    g.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    return { g, path, t2 };
+  });
+  const CODE = { 1: '', 2: 'H', 3: 'A', 4: 'D' };
+  const listHost = $('segList');
+  const GROUPS = [['Basal', 0, 6], ['Mid', 6, 12], ['Apical', 12, 16], ['Apex', 16, 17]];
+  const listEls = [];
+  GROUPS.forEach(([lab, a, b]) => {
+    const col = document.createElement('div'); col.className = 'sgrp';
+    col.innerHTML = `<div class="sgh">${lab}</div>`;
+    for (let i = a; i < b; i++) {
+      const r = document.createElement('button'); r.className = 'srow2'; r.type = 'button';
+      r.innerHTML = `<i style="background:${SEG.hex[i]}"></i><b>${i + 1}</b><span>${SEG.names[i].replace(/^(Basal|Mid|Apical) /, '')}</span><em></em>`;
+      r.addEventListener('click', () => { st.segSel = st.segSel === i ? -1 : i; st.segOn = true; syncWM(); dirty = true; });
+      col.appendChild(r); listEls[i] = r;
+    }
+    listHost.appendChild(col);
+  });
+  function syncWM() {
+    beEls.forEach(({ g, path, t2 }, i) => {
+      const sel = st.segSel === i, dim = st.segSel >= 0 && !sel;
+      path.setAttribute('fill-opacity', !st.segOn ? 0.22 : dim ? 0.3 : sel ? 0.9 : 0.6);
+      g.classList.toggle('sel', sel); t2.textContent = CODE[st.wm[i]];
+      g.setAttribute('aria-label', `Segment ${i + 1}, ${SEG.names[i]}, ${SEG.words[st.wm[i]]}`);
+      g.setAttribute('aria-pressed', String(sel));
+    });
+    listEls.forEach((r, i) => { r.setAttribute('aria-pressed', String(st.segSel === i)); r.querySelector('em').textContent = st.wm[i] > 1 ? SEG.words[st.wm[i]] : ''; r.querySelector('em').dataset.s = st.wm[i]; });
+    const has = st.segSel >= 0;
+    $('segName').textContent = has ? `${st.segSel + 1} · ${SEG.names[st.segSel]}` : 'Tap a segment on the map';
+    document.querySelectorAll('#wmPick button').forEach((b) => { b.disabled = !has; b.setAttribute('aria-pressed', String(has && st.wm[st.segSel] === +b.dataset.s)); });
+    const wmsi = st.wm.reduce((a, b) => a + b, 0) / 17;
+    $('wmsi').textContent = wmsi.toFixed(2);
+    $('wmsiNote').textContent = wmsi === 1 ? 'Normal wall motion' : `${st.wm.filter((v) => v > 1).length} abnormal segment${st.wm.filter((v) => v > 1).length === 1 ? '' : 's'}`;
+    $('segOn').setAttribute('aria-pressed', String(st.segOn)); $('segOn').textContent = st.segOn ? 'Segment colors on' : 'Segment colors off';
+    $('segNums').setAttribute('aria-pressed', String(st.segLbl !== 'off')); $('segNums').textContent = 'On image: ' + ({ names: 'names', numbers: 'numbers', off: 'no labels' })[st.segLbl];
+    $('segAll').disabled = !has;
+    document.querySelectorAll('#wmPresets .chip').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.p === st.wmPreset)));
+  }
+  document.querySelectorAll('#wmPick button').forEach((b) => b.addEventListener('click', () => { if (st.segSel < 0) return; st.wm[st.segSel] = +b.dataset.s; st.wmPreset = null; syncWM(); dirty = true; }));
+  $('segOn').addEventListener('click', () => { st.segOn = !st.segOn; syncWM(); dirty = true; });
+  $('segNums').addEventListener('click', () => { st.segLbl = ({ names: 'numbers', numbers: 'off', off: 'names' })[st.segLbl]; syncWM(); dirty = true; });
+  $('segAll').addEventListener('click', () => { st.segSel = -1; syncWM(); dirty = true; });
+  const pHost = $('wmPresets');
+  Object.keys(SEG.presets).forEach((name) => {
+    const b = document.createElement('button'); b.className = 'chip'; b.textContent = name; b.dataset.p = name;
+    b.addEventListener('click', () => { st.wm = Array(17).fill(1); for (const [k, v] of Object.entries(SEG.presets[name])) st.wm[+k - 1] = v; st.wmPreset = name; syncWM(); dirty = true; });
+    pHost.appendChild(b);
+  });
+  st.wmPreset = 'Normal';
+  syncWM();
+
   // 3D orbit
   const ptrs = new Map(); let pinch0 = 0;
   const v3 = $('v3');
@@ -1300,6 +1533,12 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
 
   // ---- rendering ----
   let dirty = true, frame = 0, ecgBuf = null, ecgX = 0, lastT = performance.now(), fpsAcc = 0, fps = 0, slow = 0;
+  const segColFlat = new Float32Array(SEG.rgb.flat());
+  function segUniforms(g, U) {
+    g.uniform1fv(U('uWM'), new Float32Array(st.wm.map((v) => SEG.score[v])));
+    g.uniform3fv(U('uSegCol'), segColFlat);
+    g.uniform1f(U('uSegOn'), st.segOn ? 1 : 0); g.uniform1f(U('uSegSel'), st.segSel);
+  }
   function renderEcho(p, c) {
     const U = PE.U; gl.useProgram(PE.p);
     gl.uniform1f(U('uS'), c.S); gl.uniform1f(U('uDesc'), c.desc); gl.uniform1f(U('uMV'), c.MV); gl.uniform1f(U('uTV'), c.TV); gl.uniform1f(U('uAV'), c.AV); gl.uniform1f(U('uPV'), c.PV);
@@ -1307,6 +1546,7 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
     gl.uniform3fv(U('uO'), p.O); gl.uniform3fv(U('uB'), p.B); gl.uniform3fv(U('uL'), p.L);
     gl.uniform1f(U('uDepth'), p.D); gl.uniform1f(U('uHalf'), 0.785); gl.uniform1f(U('uGain'), Math.pow(2, (st.gain - 50) / 22));
     gl.uniform1f(U('uTee'), st.mode === 'tee' ? 1 : 0); gl.uniform1f(U('uFrame'), frame % 97); gl.uniform1f(U('uDebug'), 0);
+    segUniforms(gl, U);
     gl.viewport(0, 0, echoCv.width, echoCv.height); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
   function render3D(p, c) {
@@ -1324,6 +1564,7 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
     const N = V3.norm(V3.cross(p.B, p.L));
     g3.uniform1f(U('uCut'), st.cut ? 1 : 0); g3.uniform1f(U('uSide'), Math.sign(V3.dot(N, V3.sub(pos, p.O))) || 1); g3.uniform1f(U('uTee'), st.mode === 'tee' ? 1 : 0); g3.uniform1f(U('uShowTorso'), st.skin ? 1 : 0);
     g3.uniform3fv(U('uPS'), p.O); g3.uniform3fv(U('uPB'), p.B); g3.uniform3fv(U('uPL'), p.L);
+    segUniforms(g3, U);
     if (st.mode === 'tee') {
       const pts = [], sJoint = st.tee.depth - 2.2 - AN.esoDepth0; let acc = 0; const P = AN.esoPath;
       pts.push(P[0]);
@@ -1353,7 +1594,7 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
     ctx.textAlign = 'left';
     // header text
     ctx.fillStyle = '#dfe6e8';
-    ctx.font = `600 ${Math.round(13 * s)}px "IBM Plex Sans Condensed", sans-serif`;
+    ctx.font = `600 ${Math.round(13 * s)}px "Barlow Semi Condensed", sans-serif`;
     ctx.fillText(st.mode === 'tte' ? 'TTE  2.5 MHz' : 'TEE  5.0 MHz', 12 * s, 10 * s);
     ctx.font = `${Math.round(11.5 * s)}px "IBM Plex Mono", monospace`; ctx.fillStyle = 'rgba(220,230,232,0.8)';
     ctx.fillText(`D ${p.D.toFixed(1)} cm`, 12 * s, 30 * s);
@@ -1361,7 +1602,7 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
     ctx.fillText(`${Math.round(fps) || '--'} Hz`, 12 * s, 62 * s);
     if (near) {
       ctx.fillStyle = near.s < 1.6 ? COL.accent : COL.muted;
-      ctx.textAlign = 'right'; ctx.font = `600 ${Math.round(13 * s)}px "IBM Plex Sans Condensed", sans-serif`;
+      ctx.textAlign = 'right'; ctx.font = `600 ${Math.round(13 * s)}px "Barlow Semi Condensed", sans-serif`;
       ctx.fillText(near.s < 1.6 ? near.k : 'Off-axis', W - 40 * s, 10 * s);
       ctx.textAlign = 'left';
     }
@@ -1375,7 +1616,7 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
     // labels
     if (st.labels) {
       const N = V3.norm(V3.cross(p.B, p.L));
-      ctx.font = `600 ${Math.round(12 * s)}px "IBM Plex Sans", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+      ctx.font = `600 ${Math.round(12 * s)}px "Barlow Semi Condensed", sans-serif`; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
       for (const [name, X, rad] of LABELS) {
         const v = V3.sub(X, p.O); const dn = V3.dot(v, N); if (Math.abs(dn) > rad * 0.8) continue;
         const al = V3.dot(v, p.B), la = V3.dot(v, p.L), r = Math.hypot(al, la), a = Math.atan2(la, al);
@@ -1383,6 +1624,34 @@ if (typeof module !== 'undefined') module.exports = { threeFrag };
         const x = ox + la * ppc, y = top + al * ppc;
         ctx.lineWidth = 3 * s; ctx.strokeStyle = 'rgba(0,0,0,0.75)'; ctx.strokeText(name, x, y); ctx.fillStyle = '#ffffff'; ctx.fillText(name, x, y);
       }
+      ctx.textAlign = 'left'; ctx.textBaseline = 'top';
+    }
+    // ASE segment numbers where a segment crosses the imaging plane
+    if (st.segOn && st.segLbl !== 'off') {
+      const N = V3.norm(V3.cross(p.B, p.L));
+      ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.font = `600 ${Math.round(11 * s)}px "IBM Plex Mono", monospace`;
+      const nameFont = `600 ${Math.round(11.5 * s)}px "Barlow Semi Condensed", sans-serif`;
+      SEG.anchor.forEach((X, i) => {
+        if (st.segSel >= 0 && st.segSel !== i) return;
+        const v = V3.sub(X, p.O); if (Math.abs(V3.dot(v, N)) > 1.1) return;
+        const al = V3.dot(v, p.B), la = V3.dot(v, p.L), r = Math.hypot(al, la), a = Math.atan2(la, al);
+        if (al < 0.8 || r > p.D - 0.4 || Math.abs(a) > 0.74) return;
+        const x = ox + la * ppc, y = top + al * ppc, rr = 9 * s;
+        if (st.segLbl === 'names') {
+          // pill with number and name, pushed outward from the LV centre so it sits beside the wall
+          const txt = `${i + 1} ${SEG.names[i]}`;
+          ctx.font = nameFont; const tw = ctx.measureText(txt).width + 12 * s, th = 17 * s;
+          let bx = Math.min(W - 30 * s - tw / 2, Math.max(tw / 2 + 6 * s, x)), by = y;
+          ctx.fillStyle = 'rgba(6,9,11,0.82)'; ctx.beginPath(); ctx.roundRect ? ctx.roundRect(bx - tw / 2, by - th / 2, tw, th, th / 2) : ctx.rect(bx - tw / 2, by - th / 2, tw, th); ctx.fill();
+          ctx.strokeStyle = SEG.hex[i]; ctx.lineWidth = 1.4 * s; ctx.stroke();
+          ctx.fillStyle = SEG.hex[i]; ctx.fillText(txt, bx, by + 0.5 * s);
+          ctx.font = `600 ${Math.round(11 * s)}px "IBM Plex Mono", monospace`;
+        } else {
+          ctx.fillStyle = 'rgba(6,9,11,0.78)'; ctx.beginPath(); ctx.arc(x, y, rr, 0, Math.PI * 2); ctx.fill();
+          ctx.strokeStyle = SEG.hex[i]; ctx.lineWidth = 1.6 * s; ctx.stroke();
+          ctx.fillStyle = SEG.hex[i]; ctx.fillText(String(i + 1), x, y + 0.5 * s);
+        }
+      });
       ctx.textAlign = 'left'; ctx.textBaseline = 'top';
     }
     // ECG strip
